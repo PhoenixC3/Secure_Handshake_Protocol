@@ -1,4 +1,4 @@
-package src.utils;
+package com.ts_24_25;
 
 public class VerifyArgs {
     public static boolean verifyPort(String port) {

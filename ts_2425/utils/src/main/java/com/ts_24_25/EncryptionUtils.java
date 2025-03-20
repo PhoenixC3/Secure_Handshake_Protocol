@@ -1,4 +1,4 @@
-package src.utils;
+package com.ts_24_25;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;

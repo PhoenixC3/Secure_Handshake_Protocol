@@ -1,4 +1,4 @@
-package src;
+package com.ts_24_25;
 import java.io.*;
 import java.net.*;
 
@@ -20,19 +20,19 @@ public class ATMClient {
         parseArgs(args);
 
         //Verificar sintaxe dos argumentos (Regex)
-        if (!src.utils.VerifyArgs.verifyAccountName(account)) 
+        if (!VerifyArgs.verifyAccountName(account)) 
 			System.exit(255);
 		
-		if (authFile != null && !src.utils.VerifyArgs.verifyFileNames(authFile)) 
+		if (authFile != null && !VerifyArgs.verifyFileNames(authFile)) 
 			System.exit(255);
 		
-		if (cardFile != null && !src.utils.VerifyArgs.verifyFileNames(cardFile)) 
+		if (cardFile != null && !VerifyArgs.verifyFileNames(cardFile)) 
 			System.exit(255);	
 		
-		if (amount != null && !src.utils.VerifyArgs.verifyAmount(amount)) 
+		if (amount != null && !VerifyArgs.verifyAmount(amount)) 
 			System.exit(255);
 		
-		if (port != null && !src.utils.VerifyArgs.verifyPort(port)) 
+		if (port != null && !VerifyArgs.verifyPort(port)) 
 			System.exit(255);
 		
 		
@@ -48,7 +48,7 @@ public class ATMClient {
             cardFile = account + ".card";
 		}
 		
-		if (!src.utils.VerifyArgs.verifyIPAddress(ip)) 
+		if (!VerifyArgs.verifyIPAddress(ip)) 
 			System.exit(255);
     }
 

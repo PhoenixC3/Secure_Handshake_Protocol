@@ -1,4 +1,4 @@
-package src.utils;
+package com.ts_24_25;
 public class MsgSequence {
     private byte[] msg;
     private int seqNumber;
