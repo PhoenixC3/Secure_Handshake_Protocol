@@ -1,4 +1,4 @@
-com/ts_24_25/MsgSequence.class
-com/ts_24_25/EncryptionUtils.class
-com/ts_24_25/CommandType.class
-com/ts_24_25/VerifyArgs.class
+com\ts_24_25\EncryptionUtils.class
+com\ts_24_25\MsgSequence.class
+com\ts_24_25\VerifyArgs.class
+com\ts_24_25\CommandType.class

@@ -1,5 +1,7 @@
 package com.ts_24_25;
+
 import java.security.InvalidKeyException;
+import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
@@ -7,7 +9,9 @@ import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.Signature;
 import java.security.SignatureException;
+import java.security.spec.X509EncodedKeySpec;
 
+import javax.crypto.Cipher;
 import javax.crypto.KeyAgreement;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
@@ -23,21 +27,53 @@ public class EncryptionUtils {
         return nonce;
     }
 
-    //Keys tem de ser DH
-    public static SecretKey createSessionKey(PrivateKey myPrivateKey, PublicKey otherPubKey) {
-		SecretKey secretKey = null;
+	public static byte[] rsaEncrypt(byte[] data, PublicKey publicKey) {
+		byte[] encryptedBytes = null;
 
 		try {
-			KeyAgreement keyAgreement = KeyAgreement.getInstance("DH");
-			keyAgreement.init(myPrivateKey);
-	        keyAgreement.doPhase(otherPubKey, true);
-
-	        byte[] sharedSecret = keyAgreement.generateSecret();
-	        secretKey = new SecretKeySpec(sharedSecret, 0, 16, "AES");
+			Cipher cipher = Cipher.getInstance("RSA");
+			cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+			encryptedBytes = cipher.doFinal(data);
 		} catch (Exception e) {
 			System.exit(255);
 		}
 
+		return encryptedBytes;
+	}
+	
+	public static byte[] rsaDecrypt(byte[] encryptedData, PrivateKey privateKey) {
+		byte[] decryptedBytes = null;
+
+		try {
+			Cipher d = Cipher.getInstance("RSA");
+			d.init(Cipher.DECRYPT_MODE, privateKey);
+			decryptedBytes = d.doFinal(encryptedData);
+		} catch (Exception e) {
+			System.exit(255);
+		}
+		
+		return decryptedBytes;
+	}
+
+    //Keys tem de ser DH
+    public static SecretKey createSessionKey(PrivateKey ownPrivateKey, byte[] othersPublicKey) {
+		SecretKey secretKey = null;
+		try {
+			KeyAgreement keyAgreement = KeyAgreement.getInstance("DH");
+			keyAgreement.init(ownPrivateKey);
+
+	        KeyFactory keyFactory = KeyFactory.getInstance("DH");
+	        X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(othersPublicKey);
+	        PublicKey bankDHPKObject = keyFactory.generatePublic(x509KeySpec);
+
+	        keyAgreement.doPhase(bankDHPKObject, true);
+	        byte[] sharedSecret = keyAgreement.generateSecret();
+			
+	        secretKey = new SecretKeySpec(sharedSecret, 0, 16, "AES");
+			
+		} catch (Exception e) {
+			System.exit(255);
+		}
 		return secretKey;
 	}
 

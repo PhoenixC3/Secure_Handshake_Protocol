@@ -1,13 +1,22 @@
 package com.ts_24_25;
-// BankServer.java
+
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.util.*;
 
 public class BankServer {
-    private int port = 3000;
-    private String authFile = "bank.auth";
+    private String port;
+    private String authFile;
     private static HashMap<String, Double> accounts = new HashMap<>();
+    private static PrivateKey privateKey;
 
     public static void main(String[] args) {
         BankServer server = new BankServer(args);
@@ -15,113 +24,137 @@ public class BankServer {
     }
 
     public BankServer(String[] args) {
-        if (!parseArguments(args)) {
-            System.exit(255);
+        parseArgs(args);
+
+        if (port == null) {
+            port = "3000";
         }
-        createAuthFile();
+
+        if (authFile == null) {
+            authFile = "bank.auth";
+        }
+
+        if (authFile != null && !VerifyArgs.verifyFileNames(authFile)) {
+			System.exit(255);
+        }
+
+        if (port != null && !VerifyArgs.verifyPort(port)) {
+			System.exit(255);
+		}
+
+        //Criar ficheiro de auth
+        try {
+			KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+			kpg.initialize(2048);
+
+			KeyPair kp = kpg.generateKeyPair();
+			privateKey = kp.getPrivate();
+
+			createAuthFile(authFile, kp.getPublic());
+		} catch (Exception e) {
+			System.exit(255);
+		}
     }
 
-    private boolean parseArguments(String[] args) {
-        for (int i = 0; i < args.length; i++) {
-            switch (args[i]) {
-                case "-p":
-                    if (i + 1 >= args.length) return false;
-                    try {
-                        port = Integer.parseInt(args[++i]);
-                    } catch (NumberFormatException e) {
-                        return false;
-                    }
-                    break;
-                case "-s":
-                    if (i + 1 >= args.length) return false;
-                    authFile = args[++i];
-                    break;
-                default:
-                    return false;
+    private void parseArgs(String[] args) {
+		int i = 0; 
+
+		while (i < args.length) {
+			if (args[i].length() >= 4096) {
+				System.exit(255);
+			}
+
+			String flag = null;
+            String value = null;
+
+			if (args[i].length() > 2) {
+				flag = args[i].substring(0,2);
+				value = args[i].substring(2);
+			}
+
+            if (flag == null) {
+                flag = args[i];
             }
-        }
-        return true;
-    }
+			
+			if(flag.equals("-s")) {
+				if (authFile != null) {
+					System.exit(255);
+				}
+				if (value == null && i + 1 < args.length) {
+					authFile = args[i + 1];
+					i++;
+				}
+				else if (i + 1 >= args.length && value == null) {
+					System.exit(255);
+				}
+				else {
+					authFile = value;
+				}
+			}
+			else if(flag.equals("-p")) {
+				if (port != null) {
+					System.exit(255);
+				}
+				if (value == null && i + 1 < args.length) {
+					port = args[i + 1];
+					i++;
+				}
+				else if (i + 1 >= args.length && value == null) {
+					System.exit(255);
+				}
+				else {
+					port = value;
+				}
+			}
+			
+			i++;
+		}
+	}
 
-    private void createAuthFile() {
+    private void createAuthFile(String authFileName, PublicKey publicKey) {
         File file = new File(authFile);
         if (file.exists()) {
             System.exit(255);
         }
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write("Banana\n");
-            System.out.println("created");
-        } catch (IOException e) {
-            System.exit(255);
-        }
-    }
+
+		try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(authFileName))) {
+			oos.writeObject(publicKey);
+			System.out.println("created");
+		} catch (IOException e) {
+			System.exit(255);
+		}
+	}
 
     public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
+        try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(port))) {
             System.out.println("Bank server is running on port " + port);
+
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try {
+                    serverSocket.close();
+                } catch (IOException e) {
+                    System.exit(0);
+                }
+
+                System.exit(0);
+            }));
+
             while (true) {
-                new ClientHandler(serverSocket.accept()).start();
+                Socket sock;
+
+                try {
+                    sock = serverSocket.accept();
+
+                    BankThread newServerThread = new BankThread(sock, privateKey);
+                    newServerThread.start();
+                } catch (IOException e) {
+                    System.out.println("protocol_error");
+                    System.exit(63);
+                }
             }
         } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static class ClientHandler extends Thread {
-        private Socket socket;
-
-        public ClientHandler(Socket socket) {
-            this.socket = socket;
-        }
-
-        public void run() {
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
-
-                String request = in.readLine();
-                String response = handleRequest(request);
-                out.println(response);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private static synchronized String handleRequest(String request) {
-
-        String[] parts = request.split(" ");
-        if (parts.length < 2) return "{\"error\":\"Invalid Request\"}";
-        
-        String command = parts[0];
-        String account = parts[1];
-        
-        switch (command) {
-            case "CREATE":
-                if (accounts.containsKey(account)) return "{\"error\":\"Account Exists\"}";
-                double initialBalance = Double.parseDouble(parts[2]);
-                accounts.put(account, initialBalance);
-                return "{\"account\":\"" + account + "\", \"initial_balance\": " + initialBalance + "}";
-            
-            case "DEPOSIT":
-                if (!accounts.containsKey(account)) return "{\"error\":\"Account Not Found\"}";
-                double depositAmount = Double.parseDouble(parts[2]);
-                if (depositAmount <= 0) return "{\"error\":\"Invalid Deposit Amount\"}";
-                accounts.put(account, accounts.get(account) + depositAmount);
-                return "{\"account\":\"" + account + "\", \"deposit\": " + depositAmount + "}";
-            
-            case "WITHDRAW":
-                if (!accounts.containsKey(account)) return "{\"error\":\"Account Not Found\"}";
-                double withdrawAmount = Double.parseDouble(parts[2]);
-                if (withdrawAmount > accounts.get(account)) return "{\"error\":\"Insufficient Funds\"}";
-                accounts.put(account, accounts.get(account) - withdrawAmount);
-                return "{\"account\":\"" + account + "\", \"withdraw\": " + withdrawAmount + "}";
-            
-            case "BALANCE":
-                if (!accounts.containsKey(account)) return "{\"error\":\"Account Not Found\"}";
-                return "{\"account\":\"" + account + "\", \"balance\": " + accounts.get(account) + "}";
-
-            default:
-                return "{\"error\":\"Unknown Command\"}";
+            System.out.println("protocol_error");
+            System.exit(63);
         }
     }
 }
