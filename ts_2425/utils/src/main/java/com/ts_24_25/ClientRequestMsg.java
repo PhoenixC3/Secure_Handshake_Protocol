@@ -7,9 +7,9 @@ public class ClientRequestMsg implements Serializable {
     private CommandType cmdType;
 	private String account;
 	private String cardFile;
-	private String amount;
+	private double amount;
 
-    public ClientRequestMsg(CommandType cmdType, String account, String cardFile, String amount) {
+    public ClientRequestMsg(CommandType cmdType, String account, String cardFile, double amount) {
 		this.cmdType = cmdType;
 		this.account = account;
 		this.cardFile = cardFile;
@@ -28,7 +28,7 @@ public class ClientRequestMsg implements Serializable {
         return cardFile;
     }
 
-    public String getAmount() {
+    public double getAmount() {
         return amount;
     }
 
@@ -44,7 +44,7 @@ public class ClientRequestMsg implements Serializable {
         this.cardFile = cardFile;
     }
 
-    public void setAmount(String amount) {
+    public void setAmount(double amount) {
         this.amount = amount;
     } 
 }

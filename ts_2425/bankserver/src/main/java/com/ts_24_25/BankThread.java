@@ -47,6 +47,21 @@ public class BankThread  extends Thread {
             
                 switch (command) {
                     case "CREATE":
+                        //Receber chave publica do cliente
+                        byte[] clientPublicKeyBytes = (byte[]) in.readObject();
+                        PublicKey clientPublicKey = (PublicKey) CommUtils.deserializeData(clientPublicKeyBytes);
+
+                        //Mutual auth
+						if (!bankAuthenticationChallenge(clientPublicKey)) {
+                            System.exit(255);
+                        }
+
+                        //DH
+                        SecretKey secretKey = bankDH(clientPublicKey);
+						if (secretKey == null) {
+                            System.exit(255);
+                        }
+
                         if (accounts.containsKey(account)) {
                             System.out.println("{\"error\":\"Account Exists\"}");
                             return;
