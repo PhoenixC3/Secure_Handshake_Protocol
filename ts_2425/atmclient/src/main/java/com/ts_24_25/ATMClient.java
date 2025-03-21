@@ -282,7 +282,7 @@ public class ATMClient {
 
 					//Criar card file
 
-					//-------------------Autenticacao mutua
+					//-------------------Autenticacao mutua (FALTA sequence numbers)
 
 					//Troca de nonce
 					clientAuthenticationChallenge(in, out, authBank, privateKey);
@@ -294,6 +294,7 @@ public class ATMClient {
 
 					//Enviar msg
 					ClientRequestMsg msg = new ClientRequestMsg(CommandType.CREATE, account, cardFile, amount);
+					//Depois vai ser encriptada com a chave secreta DH e enviada
 
 					break;
 			
