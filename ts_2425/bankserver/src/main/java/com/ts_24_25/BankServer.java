@@ -1,8 +1,16 @@
 package com.ts_24_25;
 // BankServer.java
-import java.io.*;
-import java.net.*;
-import java.util.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 public class BankServer {
     private int port = 3000;
@@ -22,12 +30,20 @@ public class BankServer {
     }
 
     private boolean parseArguments(String[] args) {
+
+        Set<String> seenArgs = new HashSet<>(); // Will store every argument we have seen to prevent duplicates
+
         for (int i = 0; i < args.length; i++) {
+
+            if (seenArgs.contains(args[i])) return false; // Detects a duplicate argument
+            seenArgs.add(args[i]); // Adds the argument to the list
+
             switch (args[i]) {
                 case "-p":
                     if (i + 1 >= args.length) return false;
                     try {
                         port = Integer.parseInt(args[++i]);
+                        if (port < 1024 || port > 65535) return false; // Make sure the port is valid
                     } catch (NumberFormatException e) {
                         return false;
                     }
