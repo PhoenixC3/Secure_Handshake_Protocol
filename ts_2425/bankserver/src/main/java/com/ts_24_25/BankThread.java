@@ -64,7 +64,7 @@ public class BankThread  extends Thread {
 						PublicKey clientPublicKeyCreate = (PublicKey) CommUtils.deserializeBytes(pubKeyMsgCreate.getMsg());
 
                         //Mutual auth
-						if (!bankAuthenticationChallenge(clientPublicKeyCreate)) {
+						if (!bankNonceExchange(clientPublicKeyCreate)) {
                             return;
                         }
 
@@ -99,7 +99,7 @@ public class BankThread  extends Thread {
                         PublicKey clientPublicKeyDeposit = (PublicKey) CommUtils.deserializeBytes(pubKeyMsgDeposit.getMsg());
 
                         //Mutual auth
-                        if (!bankAuthenticationChallenge(clientPublicKeyDeposit)) {
+                        if (!bankNonceExchange(clientPublicKeyDeposit)) {
                             return;
                         }
 
@@ -138,7 +138,7 @@ public class BankThread  extends Thread {
                         PublicKey clientPublicKeyWithdraw = (PublicKey) CommUtils.deserializeBytes(pubKeyMsgWithdraw.getMsg());
 
                         //Mutual auth
-                        if (!bankAuthenticationChallenge(clientPublicKeyWithdraw)) {
+                        if (!bankNonceExchange(clientPublicKeyWithdraw)) {
                             return;
                         }
 
@@ -177,7 +177,7 @@ public class BankThread  extends Thread {
                         PublicKey clientPublicKeyBalance = (PublicKey) CommUtils.deserializeBytes(pubKeyMsgBalance.getMsg());
 
                         //Mutual auth
-                        if (!bankAuthenticationChallenge(clientPublicKeyBalance)) {
+                        if (!bankNonceExchange(clientPublicKeyBalance)) {
                             return;
                         }
 
@@ -209,7 +209,7 @@ public class BankThread  extends Thread {
         }
     }
 
-    private boolean bankAuthenticationChallenge(PublicKey clientPubKey) {
+    private boolean bankNonceExchange(PublicKey clientPubKey) {
 		try {
             //------- CLIENT AUTH
 
@@ -252,7 +252,7 @@ public class BankThread  extends Thread {
 			byte[] nonceDecryptedMine = EncryptionUtils.rsaDecrypt(nonceEncryptedMine, privateKey);
 			MsgSequence nonceDecryptedMsgMine = (MsgSequence) CommUtils.deserializeBytes(nonceDecryptedMine);
 
-			if (nonceDecryptedMsg.getSeqNumber() != messageCounter) {
+			if (nonceDecryptedMsgMine.getSeqNumber() != messageCounter) {
 				return false;
 			}
 
