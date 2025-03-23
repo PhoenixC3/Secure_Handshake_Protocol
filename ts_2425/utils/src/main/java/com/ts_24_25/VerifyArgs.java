@@ -6,6 +6,11 @@ public class VerifyArgs {
 			return false;
 		}
 		port = port.trim();
+	
+		if (!port.matches("^[1-9][0-9]{0,4}$")) {
+			return false;
+		}
+	
 		int portNumber;
 		try {
 			portNumber = Integer.parseInt(port);
@@ -13,33 +18,16 @@ public class VerifyArgs {
 			return false;
 		}
 	
-		if (port.startsWith("0") && port.length() > 1) {
-			return false;
-		}
-	
 		return portNumber >= 1024 && portNumber <= 65535;
 	}
 	
+	
 	public static boolean verifyFileNames(String fileName) {
-		if (fileName.length() < 1 || fileName.length() > 127 || fileName.equals(".") || fileName.equals("..")) 
-			return false; 
-		
-		for(String c : fileName.split("")) {
-			if (!c.matches("[_\\-\\.0-9a-z]")) 
-				return false;
-		}
-		return true;
+		return !(fileName.length() < 1 || fileName.length() > 127 || fileName.equals(".") || fileName.equals("..") || !fileName.matches("^[_\\-\\.0-9a-z]{1,127}$"));
 	}
 	
 	public static boolean verifyAccountName(String fileName) {
-		if (fileName.length() < 1 || fileName.length() > 122) 
-			return false; 
-		
-		for (String c : fileName.split("")) {
-			if(!c.matches("[_\\-\\.0-9a-z]")) 
-				return false;
-		}
-		return true;
+		return !(fileName.length() < 1 || fileName.length() > 122 || !fileName.matches("^[_\\-\\.0-9a-z]{1,127}$"));
 	}
 	
 	public static boolean verifyIPAddress(String ipAddress) {
@@ -61,31 +49,16 @@ public class VerifyArgs {
 	}
 
 	public static boolean verifyAmount(String amount) {
-		
-		String[] amountSeparated = amount.split("\\.");
-		if (amountSeparated.length != 2) 
+		if (!amount.matches("^(0|[1-9][0-9]{0,9})\\.[0-9]{2}$")) {
 			return false;
-		
-		String wholeAmount = amountSeparated[0];
-		String fractionalPart = amountSeparated[1];
-		
-		if (fractionalPart.length() != 2)
-			return false;
-			
-		double amountInDouble = 0.0;
+		}
+		double amountInDouble;
 		try {
-			amountInDouble = Double.parseDouble(amount);	
+			amountInDouble = Double.parseDouble(amount);
 		} catch (NumberFormatException e) {
 			return false;
 		}
-		
-		if (amountInDouble >= 1 && wholeAmount.charAt(0) == '0')
-			return false;
-		
-		if (amountInDouble < 0 || amountInDouble > 4294967295.99) {
-			return false;
-		}
-
-		return true;
+		return amountInDouble >= 0.00 && amountInDouble <= 4294967295.99;
 	}
+	
 }

@@ -1,6 +1,9 @@
 package com.ts_24_25;
-import java.io.*;
-import java.net.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.Socket;
 
 public class ATMClient {
     private String ip;
@@ -248,7 +251,7 @@ public class ATMClient {
             out.println(formattedCommand + " " + account + (amount != null ? " " + amount : ""));
             System.out.println(in.readLine());
         } catch (IOException e) {
-            System.exit(255);
+            System.exit(63);
         }
     }
 
