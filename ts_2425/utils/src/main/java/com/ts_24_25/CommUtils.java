@@ -7,15 +7,18 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 
 public class CommUtils {
-    public static byte[] serializeData(Object object) {
+	
+    public static byte[] serializeBytes(Object object) {
 		byte[] result = null;
 		ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 
 		try {
 			ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream);
 			objectOutputStream.writeObject(object);
+
 			objectOutputStream.flush();
             objectOutputStream.close();
+
             result = byteArrayOutputStream.toByteArray();
 		} catch (IOException e) {
 			System.exit(255);
@@ -24,11 +27,12 @@ public class CommUtils {
 		return result;
 	}
 	
-	public static Object deserializeData(byte[] objectInBytes) {
+	public static Object deserializeBytes(byte[] objectInBytes) {
 		Object result = null;
 
 		try (ByteArrayInputStream bis = new ByteArrayInputStream(objectInBytes);
 				ObjectInputStream ois = new ObjectInputStream(bis)) {
+
 			result = ois.readObject();
 		} catch (IOException | ClassNotFoundException e) {
 			System.exit(255);

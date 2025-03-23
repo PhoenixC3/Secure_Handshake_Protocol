@@ -72,7 +72,7 @@ public class BankServer {
                 flag = args[i];
             }
 			
-			if(flag.equals("-s")) {
+			if (flag.equals("-s")) {
 				if (authFile != null) {
 					System.exit(255);
 				}
@@ -87,7 +87,7 @@ public class BankServer {
 					authFile = value;
 				}
 			}
-			else if(flag.equals("-p")) {
+			else if (flag.equals("-p")) {
 				if (port != null) {
 					System.exit(255);
 				}
@@ -116,7 +116,7 @@ public class BankServer {
 		try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(authFileName))) {
 			oos.writeObject(publicKey);
 			System.out.println("created");
-		} catch (IOException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
 	}
@@ -141,16 +141,14 @@ public class BankServer {
                 try {
                     sock = serverSocket.accept();
 
-                    BankThread newServerThread = new BankThread(sock, privateKey);
-                    newServerThread.start();
+                    BankThread bt = new BankThread(sock, privateKey);
+                    bt.start();
                 } catch (IOException e) {
                     System.out.println("protocol_error");
-                    System.exit(63);
                 }
             }
         } catch (IOException e) {
             System.out.println("protocol_error");
-            System.exit(63);
         }
     }
 }

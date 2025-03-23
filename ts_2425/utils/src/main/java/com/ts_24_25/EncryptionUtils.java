@@ -58,15 +58,16 @@ public class EncryptionUtils {
     //Keys tem de ser DH
     public static SecretKey createSessionKey(PrivateKey ownPrivateKey, byte[] othersPublicKey) {
 		SecretKey secretKey = null;
+
 		try {
 			KeyAgreement keyAgreement = KeyAgreement.getInstance("DH");
 			keyAgreement.init(ownPrivateKey);
 
 	        KeyFactory keyFactory = KeyFactory.getInstance("DH");
 	        X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(othersPublicKey);
-	        PublicKey bankDHPKObject = keyFactory.generatePublic(x509KeySpec);
+	        PublicKey otherPubKey = keyFactory.generatePublic(x509KeySpec);
 
-	        keyAgreement.doPhase(bankDHPKObject, true);
+	        keyAgreement.doPhase(otherPubKey, true);
 	        byte[] sharedSecret = keyAgreement.generateSecret();
 			
 	        secretKey = new SecretKeySpec(sharedSecret, 0, 16, "AES");
@@ -74,10 +75,11 @@ public class EncryptionUtils {
 		} catch (Exception e) {
 			System.exit(255);
 		}
+
 		return secretKey;
 	}
 
-    public static byte[] createHmac(SecretKey secretKey, byte[] message) {
+    public static byte[] Hmac(SecretKey secretKey, byte[] message) {
 		Mac hmacSha256;
 		try {
 			hmacSha256 = Mac.getInstance("HmacSHA256");
@@ -92,7 +94,7 @@ public class EncryptionUtils {
 		return null;
 	}
 	
-	public static byte[] createHash(byte[] message) {
+	public static byte[] hash(byte[] message) {
 		try {
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
 

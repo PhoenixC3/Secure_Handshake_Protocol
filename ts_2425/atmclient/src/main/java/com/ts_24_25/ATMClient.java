@@ -230,6 +230,7 @@ public class ATMClient {
 			i++;
 		}
 		
+		// Account e mode obrigatorios
 		if(account == null) {
 			System.exit(255);
 		} 
@@ -251,7 +252,8 @@ public class ATMClient {
         try (Socket socket = new Socket(ip, bankPort);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
-    
+			
+				socket.setSoTimeout(10000);
             String formattedCommand = switch (command) {
                 case "-n" -> "CREATE";
                 case "-d" -> "DEPOSIT";
@@ -269,14 +271,35 @@ public class ATMClient {
 			switch (formattedCommand) {
 				case "CREATE":
 					msg = new ClientRequestMsg(CommandType.CREATE, account, cardFile, Double.parseDouble(amount));
-					AtmModes.createAccount(msg, account, in, out, authBank, privateKey);
+					AtmModes mode = new AtmModes();
+					mode.createAccount(msg, account, in, out, authBank, privateKey);
+
+					break;
+					
+				case "DEPOSIT":
+					msg = new ClientRequestMsg(CommandType.DEPOSIT, account, cardFile, Double.parseDouble(amount));
+					// AtmModes.deposit(msg, account, in, out, authBank, privateKey);
+
+					break;
+
+				case "WITHDRAW":
+					msg = new ClientRequestMsg(CommandType.WITHDRAW, account, cardFile, Double.parseDouble(amount));
+					// AtmModes.withdraw(msg, account, in, out, authBank, privateKey);
+
+					break;
+
+				case "BALANCE":
+					msg = new ClientRequestMsg(CommandType.BALANCE, account, cardFile, 0);
+					// AtmModes.balance(msg, account, in, out, authBank, privateKey);
 
 					break;
 
 				default:
 					break;
 			}
-        } catch (IOException e) {
+        } catch (SocketTimeoutException e) {
+			System.exit(63);
+		}catch (Exception e) {
             System.exit(255);
         }
     }
