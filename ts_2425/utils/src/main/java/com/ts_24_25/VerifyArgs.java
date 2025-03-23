@@ -2,16 +2,22 @@ package com.ts_24_25;
 
 public class VerifyArgs {
     public static boolean verifyPort(String port) {
-		int portNumber = 0;
+		if (port == null || port.isEmpty()) {
+			return false;
+		}
+		port = port.trim();
+		int portNumber;
 		try {
 			portNumber = Integer.parseInt(port);
 		} catch (NumberFormatException e) {
 			return false;
 		}
-		if (port.charAt(0) == '0' || portNumber < 1024 || portNumber > 65535) {
+	
+		if (port.startsWith("0") && port.length() > 1) {
 			return false;
 		}
-		return true;
+	
+		return portNumber >= 1024 && portNumber <= 65535;
 	}
 	
 	public static boolean verifyFileNames(String fileName) {

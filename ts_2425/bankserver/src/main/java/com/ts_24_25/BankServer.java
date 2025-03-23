@@ -30,42 +30,47 @@ public class BankServer {
     }
 
     private boolean parseArguments(String[] args) {
+        if (args.length > 4096) return false;
+    
+        Set<String> seenArgs = new HashSet<>();
+        String prevFlag = null;
+    
+        for (String arg : args) {
+            arg = arg.trim();
+    
+            if (arg.isEmpty()) continue;
+    
+            if (arg.startsWith("-")) {
 
-        Set<String> seenArgs = new HashSet<>(); // Will store every argument we have seen to prevent duplicates
-
-        for (int i = 0; i < args.length; i++) {
-
-            if (seenArgs.contains(args[i])) return false; // Detects a duplicate argument
-            seenArgs.add(args[i]); // Adds the argument to the list
-
-            switch (args[i]) {
-                case "-p":
-                    if (i + 1 >= args.length) return false;
-                    try {
-                        port = Integer.parseInt(args[++i]);
-                        if (port < 1024 || port > 65535) return false; // Make sure the port is valid
-                    } catch (NumberFormatException e) {
-                        return false;
-                    }
-                    break;
-                case "-s":
-                    if (i + 1 >= args.length) return false;
-                    authFile = args[++i];
-                    break;
-                default:
-                    return false;
+                if (seenArgs.contains(arg)) return false;
+    
+                seenArgs.add(arg);
+                prevFlag = arg;
+            } else {
+                if (prevFlag == null) return false;
+    
+                if (prevFlag.equals("-p")) {
+                    if (!VerifyArgs.verifyPort(arg)) return false;
+                    port = Integer.parseInt(arg);
+                } else if (prevFlag.equals("-s")) {
+                    if (!VerifyArgs.verifyFileNames(arg)) return false;
+                    authFile = arg;
+                }
+    
+                prevFlag = null;
             }
         }
+        if (prevFlag != null) return false;
         return true;
     }
-
+    
     private void createAuthFile() {
         File file = new File(authFile);
         if (file.exists()) {
             System.exit(255);
         }
         try (FileWriter writer = new FileWriter(file)) {
-            writer.write("Banana\n");
+            writer.write("Banana\n"); // Remove this line later
             System.out.println("created");
         } catch (IOException e) {
             System.exit(255);
@@ -74,7 +79,6 @@ public class BankServer {
 
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("Bank server is running on port " + port);
             while (true) {
                 new ClientHandler(serverSocket.accept()).start();
             }
@@ -106,38 +110,75 @@ public class BankServer {
     private static synchronized String handleRequest(String request) {
 
         String[] parts = request.split(" ");
-        if (parts.length < 2) return "{\"error\":\"Invalid Request\"}";
+        if (parts.length < 2) return null;
         
         String command = parts[0];
         String account = parts[1];
+        String returningString = "";
         
         switch (command) {
             case "CREATE":
-                if (accounts.containsKey(account)) return "{\"error\":\"Account Exists\"}";
-                double initialBalance = Double.parseDouble(parts[2]);
-                accounts.put(account, initialBalance);
-                return "{\"account\":\"" + account + "\", \"initial_balance\": " + initialBalance + "}";
+                if (accounts.containsKey(account)) {
+                    returningString = null;
+                } else {
+                    double initialBalance = Double.parseDouble(parts[2]);
+                    accounts.put(account, initialBalance);
+                    returningString = "{\"account\":\"" + account + "\", \"initial_balance\": " + initialBalance + "}";
+                    
+                }
+                if (returningString != null) {
+                    System.out.println(returningString + "\n");
+                }
+                return returningString;
             
             case "DEPOSIT":
-                if (!accounts.containsKey(account)) return "{\"error\":\"Account Not Found\"}";
-                double depositAmount = Double.parseDouble(parts[2]);
-                if (depositAmount <= 0) return "{\"error\":\"Invalid Deposit Amount\"}";
-                accounts.put(account, accounts.get(account) + depositAmount);
-                return "{\"account\":\"" + account + "\", \"deposit\": " + depositAmount + "}";
+                if (!accounts.containsKey(account)) {
+                    returningString = null;
+                } else {
+                    double depositAmount = Double.parseDouble(parts[2]);
+                    if (depositAmount <= 0) {
+                        returningString = null;
+                    } else {
+                        accounts.put(account, accounts.get(account) + depositAmount);
+                    returningString = "{\"account\":\"" + account + "\", \"deposit\": " + depositAmount + "}";
+                    }
+                }
+                if (returningString != null) {
+                    System.out.println(returningString + "\n");
+                }
+                return returningString;
             
             case "WITHDRAW":
-                if (!accounts.containsKey(account)) return "{\"error\":\"Account Not Found\"}";
-                double withdrawAmount = Double.parseDouble(parts[2]);
-                if (withdrawAmount > accounts.get(account)) return "{\"error\":\"Insufficient Funds\"}";
-                accounts.put(account, accounts.get(account) - withdrawAmount);
-                return "{\"account\":\"" + account + "\", \"withdraw\": " + withdrawAmount + "}";
-            
+                if (!accounts.containsKey(account)) {
+                    returningString = null;
+                } else {
+                    double withdrawAmount = Double.parseDouble(parts[2]);
+                    if (withdrawAmount > accounts.get(account)) {
+                        returningString = null;
+                    } else {
+                        accounts.put(account, accounts.get(account) - withdrawAmount);
+                        returningString = "{\"account\":\"" + account + "\", \"withdraw\": " + withdrawAmount + "}";
+                    }
+                }
+                if (returningString != null) {
+                    System.out.println(returningString + "\n");
+                }
+                return returningString;
+
             case "BALANCE":
-                if (!accounts.containsKey(account)) return "{\"error\":\"Account Not Found\"}";
-                return "{\"account\":\"" + account + "\", \"balance\": " + accounts.get(account) + "}";
+                if (!accounts.containsKey(account)) {
+                    returningString = null;
+                } else {
+                    returningString = "{\"account\":\"" + account + "\", \"balance\": " + accounts.get(account) + "}";
+                }
+                if (returningString != null) {
+                    System.out.println(returningString + "\n");
+                }
+                return returningString;
 
             default:
-                return "{\"error\":\"Unknown Command\"}";
+                returningString = null;
+                return returningString;
         }
     }
 }
