@@ -253,7 +253,8 @@ public class ATMClient {
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
 			
-				socket.setSoTimeout(10000);
+			socket.setSoTimeout(10000);
+			
             String formattedCommand = switch (command) {
                 case "-n" -> "CREATE";
                 case "-d" -> "DEPOSIT";
