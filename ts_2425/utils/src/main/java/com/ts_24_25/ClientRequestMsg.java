@@ -4,19 +4,19 @@ import java.io.Serializable;
 
 public class ClientRequestMsg implements Serializable {
 
-    private CommandType cmdType;
+    private String cmdType;
 	private String account;
 	private String cardFile;
-	private double amount;
+	private String amount;
 
-    public ClientRequestMsg(CommandType cmdType, String account, String cardFile, double amount) {
+    public ClientRequestMsg(String cmdType, String account, String cardFile, String amount) {
 		this.cmdType = cmdType;
 		this.account = account;
 		this.cardFile = cardFile;
 		this.amount = amount;
 	}
 
-    public CommandType getCmdType() {
+    public String getCmdType() {
         return cmdType;
     }
 
@@ -28,11 +28,11 @@ public class ClientRequestMsg implements Serializable {
         return cardFile;
     }
 
-    public double getAmount() {
+    public String getAmount() {
         return amount;
     }
 
-    public void setCmdType(CommandType cmdType) {
+    public void setCmdType(String cmdType) {
         this.cmdType = cmdType;
     }
 
@@ -44,7 +44,7 @@ public class ClientRequestMsg implements Serializable {
         this.cardFile = cardFile;
     }
 
-    public void setAmount(double amount) {
+    public void setAmount(String amount) {
         this.amount = amount;
     } 
 }

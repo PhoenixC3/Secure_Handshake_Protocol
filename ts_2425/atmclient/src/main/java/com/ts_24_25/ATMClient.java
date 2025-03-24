@@ -1,14 +1,7 @@
 package com.ts_24_25;
 import java.io.*;
 import java.net.*;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
 import java.security.PublicKey;
-import java.util.Arrays;
-
-import javax.crypto.SecretKey;
 
 public class ATMClient {
     private String ip;
@@ -18,7 +11,6 @@ public class ATMClient {
     private String account;
     private String command;
     private String amount;
-	private PrivateKey privateKey;
 
 	public static void main(String[] args) {
         ATMClient client = new ATMClient(args);
@@ -253,6 +245,7 @@ public class ATMClient {
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
 			
+			// Set socket timeout to 10 seconds (10000 milliseconds)
 			socket.setSoTimeout(10000);
 			
             String formattedCommand = switch (command) {
@@ -271,27 +264,30 @@ public class ATMClient {
 
 			switch (formattedCommand) {
 				case "CREATE":
-					msg = new ClientRequestMsg(CommandType.CREATE, account, cardFile, Double.parseDouble(amount));
-					AtmModes mode = new AtmModes();
-					mode.createAccount(msg, account, in, out, authBank, privateKey);
+					msg = new ClientRequestMsg(formattedCommand, account, cardFile, amount);
+					AtmModes modeC = new AtmModes();
+					modeC.createAccount(msg, in, out, authBank);
 
 					break;
 					
 				case "DEPOSIT":
-					msg = new ClientRequestMsg(CommandType.DEPOSIT, account, cardFile, Double.parseDouble(amount));
-					// AtmModes.deposit(msg, account, in, out, authBank, privateKey);
+					msg = new ClientRequestMsg(formattedCommand, account, cardFile, amount);
+					AtmModes modeD = new AtmModes();
+					modeD.createAccount(msg, in, out, authBank);
 
 					break;
 
 				case "WITHDRAW":
-					msg = new ClientRequestMsg(CommandType.WITHDRAW, account, cardFile, Double.parseDouble(amount));
-					// AtmModes.withdraw(msg, account, in, out, authBank, privateKey);
+					msg = new ClientRequestMsg(formattedCommand, account, cardFile, amount);
+					AtmModes modeW = new AtmModes();
+					modeW.createAccount(msg, in, out, authBank);
 
 					break;
 
 				case "BALANCE":
-					msg = new ClientRequestMsg(CommandType.BALANCE, account, cardFile, 0);
-					// AtmModes.balance(msg, account, in, out, authBank, privateKey);
+					msg = new ClientRequestMsg(formattedCommand, account, cardFile, amount);
+					AtmModes modeB = new AtmModes();
+					modeB.createAccount(msg, in, out, authBank);
 
 					break;
 
