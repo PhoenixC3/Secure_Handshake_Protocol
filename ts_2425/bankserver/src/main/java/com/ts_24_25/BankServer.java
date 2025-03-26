@@ -2,11 +2,13 @@ package com.ts_24_25;
 
 import java.io.*;
 import java.net.*;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 
 import javax.crypto.SecretKey;
@@ -180,23 +182,23 @@ public class BankServer {
 					//--------------Authentication----------------
 
 					//Receber chave publica do cliente
-					MsgSequence pubKeyMsgCreate = (MsgSequence) in.readObject();
+					MsgSequence pubKeyMsg = (MsgSequence) in.readObject();
 
-					if (pubKeyMsgCreate.getSeqNumber() != sequenceNumber) {
-					return;
+					if (pubKeyMsg.getSeqNumber() != sequenceNumber) {
+						return;
 					}
 
 					sequenceNumber++;
 
-					PublicKey clientPublicKeyCreate = (PublicKey) CommUtils.deserializeBytes(pubKeyMsgCreate.getMsg());
+					byte[] clientPublicKeyBytes = (byte[]) CommUtils.deserializeBytes(pubKeyMsg.getMsg());
+					byte[] clientPublicKeyBytesDescrypted = EncryptionUtils.rsaDecrypt(clientPublicKeyBytes, privateKey);
 
-					//Mutual auth
-					if (!bankNonceExchange(clientPublicKeyCreate)) {
-						return;
-					}
+					KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+					X509EncodedKeySpec keySpec = new X509EncodedKeySpec(clientPublicKeyBytesDescrypted);
+					PublicKey clientPublicKey = keyFactory.generatePublic(keySpec);
 
 					//DH
-					SecretKey secretKey = bankDH(clientPublicKeyCreate);
+					SecretKey secretKey = bankDH(clientPublicKey);
 					if (secretKey == null) {
 						return;
 					}
@@ -340,78 +342,6 @@ public class BankServer {
 			}
 		}
 
-		private boolean bankNonceExchange(PublicKey clientPubKey) {
-			try {
-				//------- CLIENT AUTH
-
-				// Enviar nonce para o atm
-				byte[] nonce = EncryptionUtils.generateNonce();
-				MsgSequence nonceMsg = new MsgSequence(nonce, sequenceNumber);
-				byte[] encryptedNonceMessage = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(nonceMsg), clientPubKey);
-
-				out.writeObject(encryptedNonceMessage);
-				sequenceNumber++;
-				
-				// Receber nonce do atm
-				byte[] nonceEncrypted = (byte[]) in.readObject();
-				byte[] nonceDecrypted = EncryptionUtils.rsaDecrypt(nonceEncrypted, privateKey);
-				MsgSequence nonceDecryptedMsg = (MsgSequence) CommUtils.deserializeBytes(nonceDecrypted);
-
-				if (nonceDecryptedMsg.getSeqNumber() != sequenceNumber) {
-					return false;
-				}
-
-				sequenceNumber++;
-				
-				// Verificar decrypt do atm
-				if (!Arrays.equals(nonce, nonceDecryptedMsg.getMsg())) {
-					MsgSequence challengeResult = new MsgSequence(CommUtils.serializeBytes("CHALLENGE_FAILED"), sequenceNumber);
-					out.writeObject(challengeResult);
-
-					return false;
-				}
-
-				MsgSequence challengeResult = new MsgSequence(CommUtils.serializeBytes("CHALLENGE_PASSED"), sequenceNumber);
-				out.writeObject(challengeResult);
-
-				sequenceNumber++;
-				
-				//------- BANK AUTH
-				
-				// Receber nonce do atm e decrypt
-				byte[] nonceEncryptedMine = (byte[]) in.readObject();
-				byte[] nonceDecryptedMine = EncryptionUtils.rsaDecrypt(nonceEncryptedMine, privateKey);
-				MsgSequence nonceDecryptedMsgMine = (MsgSequence) CommUtils.deserializeBytes(nonceDecryptedMine);
-
-				if (nonceDecryptedMsgMine.getSeqNumber() != sequenceNumber) {
-					return false;
-				}
-
-				sequenceNumber++;
-				
-				// Encrypt e reenviar para o atm
-				MsgSequence nonceToSend = new MsgSequence(nonceDecryptedMsg.getMsg(), sequenceNumber);
-				byte[] encryptedBytes = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(nonceToSend), clientPubKey);
-
-				out.writeObject(encryptedBytes);
-				sequenceNumber++;
-				
-				//Resposta do atm
-				MsgSequence challengeResultMine = (MsgSequence) in.readObject();
-				String result = (String) CommUtils.deserializeBytes(challengeResultMine.getMsg());
-				
-				if (challengeResultMine.getSeqNumber() != sequenceNumber || result.equals("CHALLENGE_FAILED")) {
-					return false;
-				}
-				
-				sequenceNumber++;
-				
-				return true;
-			} catch (IOException | ClassNotFoundException e) {
-				return false;
-			}
-		}
-
 		private SecretKey bankDH(PublicKey clientPublicKey) {
 			try {
 				KeyPairGenerator bankKp = KeyPairGenerator.getInstance("DH");
@@ -420,11 +350,12 @@ public class BankServer {
 				
 				// Bank envia chave publica DH ao atm
 				byte[] bankDHPubKey = bankDHKeyPair.getPublic().getEncoded();
-				MsgSequence bankDHPubKeyMsg = new MsgSequence(bankDHPubKey, sequenceNumber);
+				byte[] bankDHPubKeyEncrypted = EncryptionUtils.rsaEncrypt(bankDHPubKey, clientPublicKey);
+				MsgSequence bankDHPubKeyMsg = new MsgSequence(bankDHPubKeyEncrypted, sequenceNumber);
 				out.writeObject(bankDHPubKeyMsg);
 				sequenceNumber++;
 				
-				//Send a signed hash of the public key to confirm it is correct
+				// Envia hash signed da chave pub ao atm
 				byte[] bankDHPubKeyHash = EncryptionUtils.hash(bankDHPubKey);
 				byte[] bankDHPubKeyHashSigned = EncryptionUtils.sign(bankDHPubKeyHash, privateKey);
 				MsgSequence bankDHPubKeyHashSignedMsg = new MsgSequence(bankDHPubKeyHashSigned, sequenceNumber);
@@ -441,9 +372,10 @@ public class BankServer {
 				sequenceNumber++;
 
 				byte[] atmDHPubKey = atmDHPubKeyMsg.getMsg();
-				byte[] atmDHPubKeyHash = EncryptionUtils.hash(atmDHPubKey);
+				byte[] atmDHPubKeyDecrypted = EncryptionUtils.rsaDecrypt(atmDHPubKey, privateKey);
+				byte[] atmDHPubKeyHash = EncryptionUtils.hash(atmDHPubKeyDecrypted);
 				
-				// Recebe hash signed da chave pub do atm
+				// Recebe hash signed da DH pub key do atm
 				MsgSequence atmDHPubKeyHashSignedMsg = (MsgSequence) in.readObject();
 
 				if (atmDHPubKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
@@ -454,12 +386,35 @@ public class BankServer {
 
 				byte[] atmDHPubKeyHashSigned = atmDHPubKeyHashSignedMsg.getMsg();
 				
-				//Check if it matches the signature from the bank
+				// Verificar signature
 				if (!EncryptionUtils.verifySignature(atmDHPubKeyHash, atmDHPubKeyHashSigned, clientPublicKey)) {
 					return null;
 				}
 				
 				SecretKey secretKey = EncryptionUtils.createSessionKey(bankDHKeyPair.getPrivate(), atmDHPubKey);
+				byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
+
+				//Receber signed hash da session key do atm
+				MsgSequence sessionKeyHashSignedMsg = (MsgSequence) in.readObject();
+
+				if (sessionKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
+					return null;
+				}
+	
+				sequenceNumber++;
+
+				// Enviar signed hash da session key
+				byte[] sessionKeyHashSigned = EncryptionUtils.sign(sessionKeyHash, privateKey);
+				MsgSequence sessionKeyHashSignedMsgSend = new MsgSequence(sessionKeyHashSigned, sequenceNumber);
+
+				out.writeObject(sessionKeyHashSignedMsgSend);
+				sequenceNumber++;
+
+				// Verificar a signature do atm na chave
+				if (!EncryptionUtils.verifySignature(sessionKeyHash, sessionKeyHashSignedMsg.getMsg(), clientPublicKey)) {
+					return null;
+				}
+
 				return secretKey;
 			} catch (IOException | ClassNotFoundException | NoSuchAlgorithmException e) {
 				return null;
