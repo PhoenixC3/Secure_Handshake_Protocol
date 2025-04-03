@@ -127,35 +127,42 @@ public class BankServer {
 	}
 
     public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(port))) {
-            System.out.println("Bank server is running on port " + port);
+		try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(port))) {
+			System.out.println("Bank server is running on port " + port);
+	
+			Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+				System.out.println("Shutting down server...");
+				
+				try {
+					serverSocket.close();
+				} catch (IOException e) {
+					System.out.println("protocol_error");
+				}
+			}));
+	
+			while (true) {
+				try {
+					Socket sock = serverSocket.accept();
+					BankThread bt = new BankThread(sock, privateKey);
 
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                try {
-                    serverSocket.close();
-                } catch (IOException e) {
-                    System.exit(0);
-                }
+					bt.start();
+				} catch (SocketException e) {
+					if (serverSocket.isClosed()) {
+						System.out.println("Server stopped.");
+						
+						return;
+					}
 
-                System.exit(0);
-            }));
-
-            while (true) {
-                Socket sock;
-
-                try {
-                    sock = serverSocket.accept();
-
-                    BankThread bt = new BankThread(sock, privateKey);
-                    bt.start();
-                } catch (IOException e) {
-                    System.out.println("protocol_error");
-                }
-            }
-        } catch (IOException e) {
-            System.out.println("protocol_error");
-        }
-    }
+					System.out.println("protocol_error");
+				} catch (IOException e) {
+					System.out.println("protocol_error");
+				}
+			}
+		} catch (IOException e) {
+			System.out.println("protocol_error");
+		}
+	}
+	
 
 	public static class BankThread  extends Thread {
 		private Socket socket;
@@ -254,6 +261,14 @@ public class BankServer {
 				}
 			} catch (SocketTimeoutException e) {
 				System.out.println("protocol_error");
+
+				try {
+					socket.close();
+				} catch (IOException ex) {
+					ex.printStackTrace();
+				}
+
+				return;
 			} catch (Exception e) {
 				System.exit(255);
 			}
