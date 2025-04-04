@@ -4,9 +4,9 @@ import java.io.Serializable;
 
 public class MsgSequence implements Serializable{
     private byte[] msg;
-    private int seqNumber;
+    private long seqNumber;
 
-    public MsgSequence(byte[] msg, int seqNumber) {
+    public MsgSequence(byte[] msg, long seqNumber) {
         this.msg = msg;
         this.seqNumber = seqNumber;
     }
@@ -15,7 +15,7 @@ public class MsgSequence implements Serializable{
         return msg;
     }
 
-    public int getSeqNumber() {
+    public long getSeqNumber() {
         return seqNumber;
     }
 
@@ -23,7 +23,7 @@ public class MsgSequence implements Serializable{
         this.msg = msg;
     }
 
-    public void setSeqNumber(int seqNumber) {
+    public void setSeqNumber(long seqNumber) {
         this.seqNumber = seqNumber;
     }
 }

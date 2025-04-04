@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +16,7 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 
 import javax.crypto.KeyGenerator;
@@ -22,10 +24,10 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
 public class AtmModes {
-	private int sequenceNumber;
+	private long sequenceNumber;
 
     public void createAccount(ClientRequestMsg requestMessage, ObjectInputStream in, ObjectOutputStream out, PublicKey authBank) {
-		sequenceNumber = 0;
+		sequenceNumber = new SecureRandom().nextLong();
 
 		// Verificar balance
 		if (Double.parseDouble(requestMessage.getAmount()) < 10.00) {
@@ -69,19 +71,22 @@ public class AtmModes {
 			keyGen.init(256);
 			SecretKey aesKey = keyGen.generateKey();
 
-			byte[] pubKeyAesEncrypted = EncryptionUtils.encryptAndHmac(publicKey.getEncoded(), aesKey);
-			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), authBank);
+			//Enviar chave AES para o banco
+			MsgSequence aesKeyMsg = new MsgSequence(aesKey.getEncoded(), sequenceNumber);
+			byte[] rsaEncyptedAesKeyMsg = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(aesKeyMsg), authBank);
 
-			//Enviar chave aes para o banco
-			MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+			out.writeObject(rsaEncyptedAesKeyMsg);
+			out.flush();
 
-			out.writeObject(aesKeyMsg);
 			sequenceNumber++;
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(pubKeyAesEncrypted, sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(publicKey.getEncoded(), sequenceNumber);
+			byte[] pubKeyAesEncryptedMsg = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(pubKeyMsg), aesKey);
 
-			out.writeObject(pubKeyMsg);
+			out.writeObject(pubKeyAesEncryptedMsg);
+			out.flush();
+
 			sequenceNumber++;
         } catch (Exception e) {
             System.exit(255);
@@ -160,7 +165,9 @@ public class AtmModes {
 
 				sequenceNumber++;
 
-				System.out.println(new String(responseMsg.getMsg()));
+				System.out.println(new String(responseMsg.getMsg()) + "\n");
+
+				System.exit(0);
 			} else {
 				File cfile = new File(requestMessage.getCardFile());
 
@@ -170,7 +177,7 @@ public class AtmModes {
 
 				System.exit(255);
 			}
-		} catch (SocketTimeoutException e) {
+		} catch (IOException e) {
 			File cfile = new File(requestMessage.getCardFile());
 
 			if (cfile.exists()) { 
@@ -178,7 +185,7 @@ public class AtmModes {
 			}
 
 			System.exit(63);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			File cfile = new File(requestMessage.getCardFile());
 
 			if (cfile.exists()) { 
@@ -190,7 +197,7 @@ public class AtmModes {
     }
 
 	public void deposit(ClientRequestMsg requestMessage, ObjectInputStream in, ObjectOutputStream out, PublicKey authBank) {
-		sequenceNumber = 0;
+		sequenceNumber = new SecureRandom().nextLong();
 
 		// Verificar balance
 		if (Double.parseDouble(requestMessage.getAmount()) <= 0.00) {
@@ -213,19 +220,22 @@ public class AtmModes {
 			keyGen.init(256);
 			SecretKey aesKey = keyGen.generateKey();
 
-			byte[] pubKeyAesEncrypted = EncryptionUtils.encryptAndHmac(publicKey.getEncoded(), aesKey);
-			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), authBank);
+			//Enviar chave AES para o banco
+			MsgSequence aesKeyMsg = new MsgSequence(aesKey.getEncoded(), sequenceNumber);
+			byte[] rsaEncyptedAesKeyMsg = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(aesKeyMsg), authBank);
 
-			//Enviar chave aes para o banco
-			MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+			out.writeObject(rsaEncyptedAesKeyMsg);
+			out.flush();
 
-			out.writeObject(aesKeyMsg);
 			sequenceNumber++;
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(pubKeyAesEncrypted, sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(publicKey.getEncoded(), sequenceNumber);
+			byte[] pubKeyAesEncryptedMsg = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(pubKeyMsg), aesKey);
 
-			out.writeObject(pubKeyMsg);
+			out.writeObject(pubKeyAesEncryptedMsg);
+			out.flush();
+
 			sequenceNumber++;
         } catch (Exception e) {
             System.exit(255);
@@ -292,19 +302,21 @@ public class AtmModes {
 
 				sequenceNumber++;
 
-				System.out.println(new String(responseMsg.getMsg()));
+				System.out.println(new String(responseMsg.getMsg()) + "\n");
+
+				System.exit(0);
 			} else {
 				System.exit(255);
 			}
 		} catch (SocketTimeoutException e) {
 			System.exit(63);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
     }
 
 	public void withdraw(ClientRequestMsg requestMessage, ObjectInputStream in, ObjectOutputStream out, PublicKey authBank) {
-		sequenceNumber = 0;
+		sequenceNumber = new SecureRandom().nextLong();
 
 		// Verificar balance
 		if (Double.parseDouble(requestMessage.getAmount()) <= 0.00) {
@@ -327,19 +339,22 @@ public class AtmModes {
 			keyGen.init(256);
 			SecretKey aesKey = keyGen.generateKey();
 
-			byte[] pubKeyAesEncrypted = EncryptionUtils.encryptAndHmac(publicKey.getEncoded(), aesKey);
-			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), authBank);
+			//Enviar chave AES para o banco
+			MsgSequence aesKeyMsg = new MsgSequence(aesKey.getEncoded(), sequenceNumber);
+			byte[] rsaEncyptedAesKeyMsg = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(aesKeyMsg), authBank);
 
-			//Enviar chave aes para o banco
-			MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+			out.writeObject(rsaEncyptedAesKeyMsg);
+			out.flush();
 
-			out.writeObject(aesKeyMsg);
 			sequenceNumber++;
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(pubKeyAesEncrypted, sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(publicKey.getEncoded(), sequenceNumber);
+			byte[] pubKeyAesEncryptedMsg = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(pubKeyMsg), aesKey);
 
-			out.writeObject(pubKeyMsg);
+			out.writeObject(pubKeyAesEncryptedMsg);
+			out.flush();
+
 			sequenceNumber++;
         } catch (Exception e) {
             System.exit(255);
@@ -406,19 +421,21 @@ public class AtmModes {
 
 				sequenceNumber++;
 
-				System.out.println(new String(responseMsg.getMsg()));
+				System.out.println(new String(responseMsg.getMsg()) + "\n");
+
+				System.exit(0);
 			} else {
 				System.exit(255);
 			}
 		} catch (SocketTimeoutException e) {
 			System.exit(63);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
     }
 
 	public void balance(ClientRequestMsg requestMessage, ObjectInputStream in, ObjectOutputStream out, PublicKey authBank) {
-		sequenceNumber = 0;
+		sequenceNumber = new SecureRandom().nextLong();
 
 		KeyPair kp = loadCardFile(requestMessage.getCardFile());
 
@@ -436,19 +453,22 @@ public class AtmModes {
 			keyGen.init(256);
 			SecretKey aesKey = keyGen.generateKey();
 
-			byte[] pubKeyAesEncrypted = EncryptionUtils.encryptAndHmac(publicKey.getEncoded(), aesKey);
-			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), authBank);
+			//Enviar chave AES para o banco
+			MsgSequence aesKeyMsg = new MsgSequence(aesKey.getEncoded(), sequenceNumber);
+			byte[] rsaEncyptedAesKeyMsg = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(aesKeyMsg), authBank);
 
-			//Enviar chave aes para o banco
-			MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+			out.writeObject(rsaEncyptedAesKeyMsg);
+			out.flush();
 
-			out.writeObject(aesKeyMsg);
 			sequenceNumber++;
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(pubKeyAesEncrypted, sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(publicKey.getEncoded(), sequenceNumber);
+			byte[] pubKeyAesEncryptedMsg = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(pubKeyMsg), aesKey);
 
-			out.writeObject(pubKeyMsg);
+			out.writeObject(pubKeyAesEncryptedMsg);
+			out.flush();
+
 			sequenceNumber++;
         } catch (Exception e) {
             System.exit(255);
@@ -515,13 +535,15 @@ public class AtmModes {
 
 				sequenceNumber++;
 
-				System.out.println(new String(responseMsg.getMsg()));
+				System.out.println(new String(responseMsg.getMsg()) + "\n");
+
+				System.exit(0);
 			} else {
 				System.exit(255);
 			}
 		} catch (SocketTimeoutException e) {
 			System.exit(63);
-		} catch (IOException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
     }
@@ -540,7 +562,9 @@ public class AtmModes {
 	        // -----------Receber chave publica DH do bank
 
 			//Receber AES key do bank
-			MsgSequence aesDHPubKeyMsg = (MsgSequence) in.readObject();
+			byte[] aesDHPubKey = (byte[]) in.readObject();
+			byte[] aesDHPubKeyDecoded = EncryptionUtils.rsaDecrypt(aesDHPubKey, privateKey);
+			MsgSequence aesDHPubKeyMsg = (MsgSequence) CommUtils.deserializeBytes(aesDHPubKeyDecoded);
 
 			if (aesDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
 				return null;
@@ -548,12 +572,12 @@ public class AtmModes {
 
 			sequenceNumber++;
 
-			byte[] bankAesDHPubKey = aesDHPubKeyMsg.getMsg();
-			byte[] bankAesDHPubKeyDecoded = EncryptionUtils.rsaDecrypt(bankAesDHPubKey, privateKey);
-			SecretKey aesKeyBank = new SecretKeySpec(bankAesDHPubKeyDecoded, "AES");
+			SecretKey aesKeyBank = new SecretKeySpec(aesDHPubKeyMsg.getMsg(), "AES");
 
 			// Receber DH
-			MsgSequence bankDHPubKeyMsg = (MsgSequence) in.readObject();
+			byte[] bankDHPubKey = (byte[]) in.readObject();
+			byte[] bankDHPubKeyDecoded = EncryptionUtils.decryptAndVerifyHmac(bankDHPubKey, aesKeyBank);
+			MsgSequence bankDHPubKeyMsg = (MsgSequence) CommUtils.deserializeBytes(bankDHPubKeyDecoded);
 			
 			if (bankDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
 				return null;
@@ -561,11 +585,8 @@ public class AtmModes {
 
 			sequenceNumber++;
 
-			byte[] bankDHPubKey = bankDHPubKeyMsg.getMsg();
-			byte[] bankDHPubKeyDecoded = EncryptionUtils.decryptAndVerifyHmac(bankDHPubKey, aesKeyBank);
-
 			// ------------Fazer hash da chave DH publica do bank
-			byte[] bankDHPubKeyHash = EncryptionUtils.hash(bankDHPubKeyDecoded);
+			byte[] bankDHPubKeyHash = EncryptionUtils.hash(bankDHPubKeyMsg.getMsg());
 			
 			// ------------Receber signed hash da chave DH publica do bank
 			MsgSequence bankDHPubKeyHashSignedMsg = (MsgSequence) in.readObject();
@@ -591,17 +612,21 @@ public class AtmModes {
 			SecretKey aesKey = keyGen.generateKey();
 
 			// Envia chave AES para o ATM
-			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), authBank);
-			MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+			MsgSequence aesKeyMsg = new MsgSequence(aesKey.getEncoded(), sequenceNumber);
+			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(aesKeyMsg), authBank);
 
-			out.writeObject(aesKeyMsg);
+			out.writeObject(rsaEncyptedAesKey);
+			out.flush();
+
 			sequenceNumber++;
 
 			//Envia DH pub key para o ATM
-			byte[] dhKeyAesEncrypted = EncryptionUtils.encryptAndHmac(clientDHPubKey, aesKey);
-			MsgSequence dhKeyAesEncryptedMsg = new MsgSequence(dhKeyAesEncrypted, sequenceNumber);
+			MsgSequence clientDHPubKeyMsg = new MsgSequence(clientDHPubKey, sequenceNumber);
+			byte[] dhKeyAesEncrypted = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(clientDHPubKeyMsg), aesKey);
 
-			out.writeObject(dhKeyAesEncryptedMsg);
+			out.writeObject(dhKeyAesEncrypted);
+			out.flush();
+
 			sequenceNumber++;
 	        
 	        // -------------Enviar signed hash da chave DH publica ao bank
@@ -610,9 +635,11 @@ public class AtmModes {
 	        MsgSequence clientDHPubKeyHashSignedMsg = new MsgSequence(clientDHPubKeyHashSigned, sequenceNumber);
 			
 	        out.writeObject(clientDHPubKeyHashSignedMsg);
+			out.flush();
+
 	        sequenceNumber++;
 	        
-	        secretKey = EncryptionUtils.createSessionKey(clientDHKeyPair.getPrivate(), bankDHPubKeyDecoded);
+	        secretKey = EncryptionUtils.createSessionKey(clientDHKeyPair.getPrivate(), bankDHPubKeyMsg.getMsg());
 
 			// ----------------Enviar signed hash da session key ao bank
 			byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
@@ -620,6 +647,8 @@ public class AtmModes {
 			MsgSequence sessionKeyHashSignedMsg = new MsgSequence(sessionKeyHashSigned, sequenceNumber);
 
 			out.writeObject(sessionKeyHashSignedMsg);
+			out.flush();
+
 			sequenceNumber++;
 
 			// ---------------Receber signed hash da session key do bank
@@ -648,6 +677,7 @@ public class AtmModes {
 	private static void createCardFile(String cardFileName, KeyPair keypair) {
 		try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(cardFileName))) {
 			oos.writeObject(keypair);
+			oos.flush();
 		} catch (IOException e) {
 			File cfile = new File(cardFileName);
 

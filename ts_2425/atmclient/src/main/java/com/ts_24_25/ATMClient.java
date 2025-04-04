@@ -294,9 +294,9 @@ public class ATMClient {
 				default:
 					break;
 			}
-        } catch (SocketTimeoutException e) {
+        } catch (IOException e) {
 			System.exit(63);
-		}catch (Exception e) {
+		} catch (Exception e) {
             System.exit(255);
         }
     }

@@ -122,6 +122,8 @@ public class BankServer {
 
 		try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(authFileName))) {
 			oos.writeObject(publicKey);
+			oos.flush();
+
 			System.out.println("created");
 		} catch (Exception e) {
 			System.exit(255);
@@ -133,13 +135,13 @@ public class BankServer {
 			System.out.println("Bank server is running on port " + port + "\n");
 	
 			Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-				System.out.println("Shutting down server...");
-				
 				try {
 					serverSocket.close();
 				} catch (IOException e) {
-					System.out.println("protocol_error");
+					System.exit(255);
 				}
+
+				System.exit(0);
 			}));
 	
 			while (true) {
@@ -150,8 +152,6 @@ public class BankServer {
 					bt.start();
 				} catch (SocketException e) {
 					if (serverSocket.isClosed()) {
-						System.out.println("Server stopped.");
-
 						return;
 					}
 
@@ -171,7 +171,7 @@ public class BankServer {
 		private PrivateKey privateKey;
 		private ObjectInputStream in;
 		private ObjectOutputStream out;
-		private int sequenceNumber;
+		private long sequenceNumber;
 
 		public BankThread(Socket socket, PrivateKey privateKey) {
 			this.socket = socket;
@@ -197,19 +197,19 @@ public class BankServer {
 					// ----------Receber chave publica do cliente
 
 					//Receber chave aes do cliente
-					MsgSequence aesKeyMsg = (MsgSequence) in.readObject();
+					byte[] aesKeyMsgBytes = (byte[]) in.readObject();
+					byte[] aesKeyMsgBytesDecrypted = EncryptionUtils.rsaDecrypt(aesKeyMsgBytes, privateKey);
+					MsgSequence aesKeyMsg = (MsgSequence) CommUtils.deserializeBytes(aesKeyMsgBytesDecrypted);
 
-					if (aesKeyMsg.getSeqNumber() != sequenceNumber) {
-						return;
-					}
-
+					sequenceNumber = aesKeyMsg.getSeqNumber();
 					sequenceNumber++;
 
-					byte[] aesKeyBytesDecrypted = EncryptionUtils.rsaDecrypt(aesKeyMsg.getMsg(), privateKey);
-					SecretKey aesKey = new SecretKeySpec(aesKeyBytesDecrypted, "AES");
+					SecretKey aesKey = new SecretKeySpec(aesKeyMsg.getMsg(), "AES");
 
 					//Receber chave publica do cliente
-					MsgSequence pubKeyMsg = (MsgSequence) in.readObject();
+					byte[] pubKeyMsgBytes = (byte[]) in.readObject();
+					byte[] clientPublicKeyBytesDecrypted = EncryptionUtils.decryptAndVerifyHmac(pubKeyMsgBytes, aesKey);
+					MsgSequence pubKeyMsg = (MsgSequence) CommUtils.deserializeBytes(clientPublicKeyBytesDecrypted);
 
 					if (pubKeyMsg.getSeqNumber() != sequenceNumber) {
 						return;
@@ -217,10 +217,8 @@ public class BankServer {
 
 					sequenceNumber++;
 
-					byte[] clientPublicKeyBytesDescrypted = EncryptionUtils.decryptAndVerifyHmac(pubKeyMsg.getMsg(), aesKey);
-
 					KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-					X509EncodedKeySpec keySpec = new X509EncodedKeySpec(clientPublicKeyBytesDescrypted);
+					X509EncodedKeySpec keySpec = new X509EncodedKeySpec(pubKeyMsg.getMsg());
 					PublicKey clientPublicKey = keyFactory.generatePublic(keySpec);
 
 					// ----------DH
@@ -289,14 +287,11 @@ public class BankServer {
 						return;
 					}
 					else {
-						System.out.println("protocol_error\n");
-
 						return;
 					}
 				}
 			} catch (SocketTimeoutException e) {
 				System.out.println("protocol_error");
-
 				return;
 			} catch (Exception e) {
 				return;
@@ -323,9 +318,7 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println("--------------------------------------------------");
-						System.out.println(returningString);
-						System.out.println("--------------------------------------------------\n");
+						System.out.println(returningString + "\n");
 					}
 
 					return returningString;
@@ -348,9 +341,7 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println("--------------------------------------------------");
-						System.out.println(returningString);
-						System.out.println("--------------------------------------------------\n");
+						System.out.println(returningString + "\n");
 					}
 
 					return returningString;
@@ -371,9 +362,7 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println("--------------------------------------------------");
-						System.out.println(returningString);
-						System.out.println("--------------------------------------------------\n");
+						System.out.println(returningString + "\n");
 					}
 
 					return returningString;
@@ -390,9 +379,7 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println("--------------------------------------------------");
-						System.out.println(returningString);
-						System.out.println("--------------------------------------------------\n");
+						System.out.println(returningString + "\n");
 					}
 
 					return returningString;
@@ -406,6 +393,7 @@ public class BankServer {
 
 		private SecretKey bankDH(PublicKey clientPublicKey) {
 			try {
+				//-------------- Bank gera chave privada e publica DH
 				KeyPairGenerator bankKp = KeyPairGenerator.getInstance("DH");
 				bankKp.initialize(2048);
 				KeyPair bankDHKeyPair = bankKp.generateKeyPair();
@@ -419,17 +407,21 @@ public class BankServer {
 				SecretKey aesKey = keyGen.generateKey();
 
 				// Envia chave AES para o ATM
-				byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), clientPublicKey);
-				MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+				MsgSequence aesKeyMsg = new MsgSequence(aesKey.getEncoded(), sequenceNumber);
+				byte[] rsaEncyptedAesKeyMsg = EncryptionUtils.rsaEncrypt(CommUtils.serializeBytes(aesKeyMsg), clientPublicKey);
 
-				out.writeObject(aesKeyMsg);
+				out.writeObject(rsaEncyptedAesKeyMsg);
+				out.flush();
+
 				sequenceNumber++;
 
 				//Envia DH pub key para o ATM
-				byte[] dhKeyAesEncrypted = EncryptionUtils.encryptAndHmac(bankDHPubKey, aesKey);
-				MsgSequence bankDHPubKeyMsg = new MsgSequence(dhKeyAesEncrypted, sequenceNumber);
+				MsgSequence bankDHPubKeyMsg = new MsgSequence(bankDHPubKey, sequenceNumber);
+				byte[] dhKeyAesEncryptedMsg = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(bankDHPubKeyMsg), aesKey);
 
-				out.writeObject(bankDHPubKeyMsg);
+				out.writeObject(dhKeyAesEncryptedMsg);
+				out.flush();
+
 				sequenceNumber++;
 				
 				// ----------------Envia hash signed da chave pub ao atm
@@ -438,12 +430,16 @@ public class BankServer {
 				MsgSequence bankDHPubKeyHashSignedMsg = new MsgSequence(bankDHPubKeyHashSigned, sequenceNumber);
 
 				out.writeObject(bankDHPubKeyHashSignedMsg);
+				out.flush();
+
 				sequenceNumber++;
 				
 				// -----------Receber chave publica DH do bank
 
 				//Receber AES key do bank
-				MsgSequence aesDHPubKeyMsg = (MsgSequence) in.readObject();
+				byte[] aesDHPubKeyMsgBytes = (byte[]) in.readObject();
+				byte[] aesDHPubKeyMsgBytesDecrypted = EncryptionUtils.rsaDecrypt(aesDHPubKeyMsgBytes, privateKey);
+				MsgSequence aesDHPubKeyMsg = (MsgSequence) CommUtils.deserializeBytes(aesDHPubKeyMsgBytesDecrypted);
 
 				if (aesDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
 					return null;
@@ -451,12 +447,12 @@ public class BankServer {
 
 				sequenceNumber++;
 
-				byte[] atmAesDHPubKey = aesDHPubKeyMsg.getMsg();
-				byte[] atmAesDHPubKeyDecoded = EncryptionUtils.rsaDecrypt(atmAesDHPubKey, privateKey);
-				SecretKey aesKeyAtm = new SecretKeySpec(atmAesDHPubKeyDecoded, "AES");
+				SecretKey aesKeyAtm = new SecretKeySpec(aesDHPubKeyMsg.getMsg(), "AES");
 
 				// Receber DH
-				MsgSequence AtmDHPubKeyMsg = (MsgSequence) in.readObject();
+				byte[] AtmDHPubKeyMsgBytes = (byte[]) in.readObject();
+				byte[] AtmDHPubKeyMsgBytesDecrypted = EncryptionUtils.decryptAndVerifyHmac(AtmDHPubKeyMsgBytes, aesKeyAtm);
+				MsgSequence AtmDHPubKeyMsg = (MsgSequence) CommUtils.deserializeBytes(AtmDHPubKeyMsgBytesDecrypted);
 				
 				if (AtmDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
 					return null;
@@ -464,11 +460,8 @@ public class BankServer {
 
 				sequenceNumber++;
 
-				byte[] atmDHPubKey = AtmDHPubKeyMsg.getMsg();
-				byte[] atmDHPubKeyDecoded = EncryptionUtils.decryptAndVerifyHmac(atmDHPubKey, aesKeyAtm);
-
 				// ---------- Hash da DH pub key do atm
-				byte[] atmDHPubKeyHash = EncryptionUtils.hash(atmDHPubKeyDecoded);
+				byte[] atmDHPubKeyHash = EncryptionUtils.hash(AtmDHPubKeyMsg.getMsg());
 				
 				// ----------------------Recebe hash signed da DH pub key do atm
 				MsgSequence atmDHPubKeyHashSignedMsg = (MsgSequence) in.readObject();
@@ -486,8 +479,7 @@ public class BankServer {
 					return null;
 				}
 				
-				SecretKey secretKey = EncryptionUtils.createSessionKey(bankDHKeyPair.getPrivate(), atmDHPubKeyDecoded);
-				byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
+				SecretKey secretKey = EncryptionUtils.createSessionKey(bankDHKeyPair.getPrivate(), AtmDHPubKeyMsg.getMsg());
 
 				// --------------------Receber signed hash da session key do atm
 				MsgSequence sessionKeyHashSignedMsg = (MsgSequence) in.readObject();
@@ -499,10 +491,13 @@ public class BankServer {
 				sequenceNumber++;
 
 				// ----------------------Enviar signed hash da session key
+				byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
 				byte[] sessionKeyHashSigned = EncryptionUtils.sign(sessionKeyHash, privateKey);
 				MsgSequence sessionKeyHashSignedMsgSend = new MsgSequence(sessionKeyHashSigned, sequenceNumber);
 
 				out.writeObject(sessionKeyHashSignedMsgSend);
+				out.flush();
+
 				sequenceNumber++;
 
 				// ----------------Verificar a signature do atm na chave
@@ -521,8 +516,9 @@ public class BankServer {
 
 			try {
 				outStream = new ObjectOutputStream(socket.getOutputStream());
-			} catch (SocketTimeoutException e) {
+			} catch (IOException e) {
 				System.out.println("protocol_error");
+				return null;
 			} catch (Exception e) {
 				return null;
 			}
@@ -535,8 +531,9 @@ public class BankServer {
 
 			try {
 				inStream = new ObjectInputStream(socket.getInputStream());
-			} catch (SocketTimeoutException e) {
+			} catch (IOException e) {
 				System.out.println("protocol_error\n");
+				return null;
 			} catch (Exception e) {
 				return null;
 			}
