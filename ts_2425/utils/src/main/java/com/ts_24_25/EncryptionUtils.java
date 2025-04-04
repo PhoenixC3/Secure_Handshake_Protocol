@@ -215,7 +215,6 @@ public class EncryptionUtils {
 
 		// Verify the HMAC
 		if (!verifyHmac(secretKey, cypherText, hmac)) {
-			System.out.println("HMAC verification failed");
 			System.exit(255);
 		}
 

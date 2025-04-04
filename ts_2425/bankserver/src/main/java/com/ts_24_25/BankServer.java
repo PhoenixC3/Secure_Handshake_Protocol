@@ -273,7 +273,13 @@ public class BankServer {
 						response = handleRequest(request, clientPublicKey, cardFileHash);
 
 						// Encrypts and sends the response
-						MsgSequence responseMsg = new MsgSequence(response.getBytes(), sequenceNumber);
+						MsgSequence responseMsg = null;
+
+						if (response != null) {
+							responseMsg = new MsgSequence(response.getBytes(), sequenceNumber);
+						} else {
+							responseMsg = new MsgSequence(null, sequenceNumber);
+						}
 
 						byte[] cypherTextAndHmac = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(responseMsg), secretKey);
 
@@ -293,7 +299,6 @@ public class BankServer {
 
 				return;
 			} catch (Exception e) {
-				e.printStackTrace();
 				return;
 			}
 		}
@@ -333,7 +338,8 @@ public class BankServer {
 
 						if (depositAmount <= 0.00) {
 							returningString = null;
-						} else if (cardFileHash != cardFileHashes.get(account)) {
+						} else if (!Arrays.equals(cardFileHash, cardFileHashes.get(account))) {
+							System.out.println("aqui");
 							returningString = null;
 						} else {
 							accounts.put(account, accounts.get(account) + depositAmount);
@@ -356,7 +362,7 @@ public class BankServer {
 						double withdrawAmount = Double.parseDouble(parts[2]);
 						if (withdrawAmount > accounts.get(account)) {
 							returningString = null;
-						} else if (cardFileHash != cardFileHashes.get(account)) {
+						} else if (!Arrays.equals(cardFileHash, cardFileHashes.get(account))) {
 							returningString = null;
 						} else {
 							accounts.put(account, accounts.get(account) - withdrawAmount);
@@ -376,7 +382,7 @@ public class BankServer {
 					if (!accounts.containsKey(account)) {
 						returningString = null;
 					} else {
-						if (cardFileHash != cardFileHashes.get(account)) {
+						if (!Arrays.equals(cardFileHash, cardFileHashes.get(account))) {
 							returningString = null;
 						} else {
 							returningString = "{\"account\":\"" + account + "\", \"balance\": " + accounts.get(account) + "}";
