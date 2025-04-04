@@ -273,21 +273,21 @@ public class ATMClient {
 				case "DEPOSIT":
 					msg = new ClientRequestMsg(formattedCommand, account, cardFile, amount);
 					AtmModes modeD = new AtmModes();
-					modeD.createAccount(msg, in, out, authBank);
+					modeD.deposit(msg, in, out, authBank);
 
 					break;
 
 				case "WITHDRAW":
 					msg = new ClientRequestMsg(formattedCommand, account, cardFile, amount);
 					AtmModes modeW = new AtmModes();
-					modeW.createAccount(msg, in, out, authBank);
+					modeW.withdraw(msg, in, out, authBank);
 
 					break;
 
 				case "BALANCE":
 					msg = new ClientRequestMsg(formattedCommand, account, cardFile, amount);
 					AtmModes modeB = new AtmModes();
-					modeB.createAccount(msg, in, out, authBank);
+					modeB.balance(msg, in, out, authBank);
 
 					break;
 
