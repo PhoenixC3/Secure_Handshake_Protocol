@@ -11,7 +11,9 @@ import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 public class BankServer {
     private String port;
@@ -149,7 +151,7 @@ public class BankServer {
 				} catch (SocketException e) {
 					if (serverSocket.isClosed()) {
 						System.out.println("Server stopped.");
-						
+
 						return;
 					}
 
@@ -188,6 +190,18 @@ public class BankServer {
 				while (true) {
 					//--------------Authentication----------------
 
+					//Receber chave aes do cliente
+					MsgSequence aesKeyMsg = (MsgSequence) in.readObject();
+
+					if (aesKeyMsg.getSeqNumber() != sequenceNumber) {
+						return;
+					}
+
+					sequenceNumber++;
+
+					byte[] aesKeyBytesDecrypted = EncryptionUtils.rsaDecrypt(aesKeyMsg.getMsg(), privateKey);
+					SecretKey aesKey = new SecretKeySpec(aesKeyBytesDecrypted, "AES");
+
 					//Receber chave publica do cliente
 					MsgSequence pubKeyMsg = (MsgSequence) in.readObject();
 
@@ -197,8 +211,7 @@ public class BankServer {
 
 					sequenceNumber++;
 
-					byte[] clientPublicKeyBytes = (byte[]) CommUtils.deserializeBytes(pubKeyMsg.getMsg());
-					byte[] clientPublicKeyBytesDescrypted = EncryptionUtils.rsaDecrypt(clientPublicKeyBytes, privateKey);
+					byte[] clientPublicKeyBytesDescrypted = EncryptionUtils.decryptAndVerifyHmac(pubKeyMsg.getMsg(), aesKey);
 
 					KeyFactory keyFactory = KeyFactory.getInstance("RSA");
 					X509EncodedKeySpec keySpec = new X509EncodedKeySpec(clientPublicKeyBytesDescrypted);
@@ -211,6 +224,8 @@ public class BankServer {
 					}
 
 					//--------------Authentication Finished----------------
+
+					System.out.println("bank_authenticated");
 
 					// Receives the request
 					ArrayList<Byte> byteList = new ArrayList<>();
@@ -231,7 +246,7 @@ public class BankServer {
 					try {
 						msg = (MsgSequence) CommUtils.deserializeBytes(decryptedMessage);
 					} catch (Exception e) {
-						e.printStackTrace();
+						return;
 					}
 
 					String response = null;
@@ -362,35 +377,68 @@ public class BankServer {
 				KeyPairGenerator bankKp = KeyPairGenerator.getInstance("DH");
 				bankKp.initialize(2048);
 				KeyPair bankDHKeyPair = bankKp.generateKeyPair();
-				
-				// Bank envia chave publica DH ao atm
+
+				//-------------- Bank envia chave publica DH ao atm
 				byte[] bankDHPubKey = bankDHKeyPair.getPublic().getEncoded();
-				byte[] bankDHPubKeyEncrypted = EncryptionUtils.rsaEncrypt(bankDHPubKey, clientPublicKey);
-				MsgSequence bankDHPubKeyMsg = new MsgSequence(bankDHPubKeyEncrypted, sequenceNumber);
+				
+				//Criar chave AES para enviar DH Key
+				KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+				keyGen.init(256);
+				SecretKey aesKey = keyGen.generateKey();
+
+				// Envia chave AES para o ATM
+				byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), clientPublicKey);
+				MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+
+				out.writeObject(aesKeyMsg);
+				sequenceNumber++;
+
+				//Envia DH pub key para o ATM
+				byte[] dhKeyAesEncrypted = EncryptionUtils.encryptAndHmac(bankDHPubKey, aesKey);
+				MsgSequence bankDHPubKeyMsg = new MsgSequence(dhKeyAesEncrypted, sequenceNumber);
+
 				out.writeObject(bankDHPubKeyMsg);
 				sequenceNumber++;
 				
-				// Envia hash signed da chave pub ao atm
+				// ----------------Envia hash signed da chave pub ao atm
 				byte[] bankDHPubKeyHash = EncryptionUtils.hash(bankDHPubKey);
 				byte[] bankDHPubKeyHashSigned = EncryptionUtils.sign(bankDHPubKeyHash, privateKey);
 				MsgSequence bankDHPubKeyHashSignedMsg = new MsgSequence(bankDHPubKeyHashSigned, sequenceNumber);
+
 				out.writeObject(bankDHPubKeyHashSignedMsg);
 				sequenceNumber++;
 				
-				// Receber DH pub key do ATM
-				MsgSequence atmDHPubKeyMsg = (MsgSequence) in.readObject();
+				// -----------Receber chave publica DH do bank
 
-				if (atmDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
+				//Receber AES key do bank
+				MsgSequence aesDHPubKeyMsg = (MsgSequence) in.readObject();
+
+				if (aesDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
 					return null;
 				}
 
 				sequenceNumber++;
 
-				byte[] atmDHPubKey = atmDHPubKeyMsg.getMsg();
-				byte[] atmDHPubKeyDecrypted = EncryptionUtils.rsaDecrypt(atmDHPubKey, privateKey);
-				byte[] atmDHPubKeyHash = EncryptionUtils.hash(atmDHPubKeyDecrypted);
+				byte[] atmAesDHPubKey = aesDHPubKeyMsg.getMsg();
+				byte[] atmAesDHPubKeyDecoded = EncryptionUtils.rsaDecrypt(atmAesDHPubKey, privateKey);
+				SecretKey aesKeyAtm = new SecretKeySpec(atmAesDHPubKeyDecoded, "AES");
+
+				// Receber DH
+				MsgSequence AtmDHPubKeyMsg = (MsgSequence) in.readObject();
 				
-				// Recebe hash signed da DH pub key do atm
+				if (AtmDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
+					return null;
+				}
+
+				sequenceNumber++;
+
+				byte[] atmDHPubKey = AtmDHPubKeyMsg.getMsg();
+				byte[] atmDHPubKeyDecoded = EncryptionUtils.decryptAndVerifyHmac(atmDHPubKey, aesKeyAtm);
+
+				// ---------- Hash da DH pub key do atm
+				byte[] atmDHPubKeyHash = EncryptionUtils.hash(atmDHPubKeyDecoded);
+				
+				// ----------------------Recebe hash signed da DH pub key do atm
 				MsgSequence atmDHPubKeyHashSignedMsg = (MsgSequence) in.readObject();
 
 				if (atmDHPubKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
@@ -401,15 +449,15 @@ public class BankServer {
 
 				byte[] atmDHPubKeyHashSigned = atmDHPubKeyHashSignedMsg.getMsg();
 				
-				// Verificar signature
+				// -----------------------Verificar signature
 				if (!EncryptionUtils.verifySignature(atmDHPubKeyHash, atmDHPubKeyHashSigned, clientPublicKey)) {
 					return null;
 				}
 				
-				SecretKey secretKey = EncryptionUtils.createSessionKey(bankDHKeyPair.getPrivate(), atmDHPubKey);
+				SecretKey secretKey = EncryptionUtils.createSessionKey(bankDHKeyPair.getPrivate(), atmDHPubKeyDecoded);
 				byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
 
-				//Receber signed hash da session key do atm
+				// --------------------Receber signed hash da session key do atm
 				MsgSequence sessionKeyHashSignedMsg = (MsgSequence) in.readObject();
 
 				if (sessionKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
@@ -418,20 +466,20 @@ public class BankServer {
 	
 				sequenceNumber++;
 
-				// Enviar signed hash da session key
+				// ----------------------Enviar signed hash da session key
 				byte[] sessionKeyHashSigned = EncryptionUtils.sign(sessionKeyHash, privateKey);
 				MsgSequence sessionKeyHashSignedMsgSend = new MsgSequence(sessionKeyHashSigned, sequenceNumber);
 
 				out.writeObject(sessionKeyHashSignedMsgSend);
 				sequenceNumber++;
 
-				// Verificar a signature do atm na chave
+				// ----------------Verificar a signature do atm na chave
 				if (!EncryptionUtils.verifySignature(sessionKeyHash, sessionKeyHashSignedMsg.getMsg(), clientPublicKey)) {
 					return null;
 				}
 
 				return secretKey;
-			} catch (IOException | ClassNotFoundException | NoSuchAlgorithmException e) {
+			} catch (Exception e) {
 				return null;
 			}
 		}

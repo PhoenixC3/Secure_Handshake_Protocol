@@ -1,6 +1,8 @@
 package com.ts_24_25;
 
-public class MsgSequence {
+import java.io.Serializable;
+
+public class MsgSequence implements Serializable{
     private byte[] msg;
     private int seqNumber;
 

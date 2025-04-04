@@ -115,7 +115,7 @@ public class EncryptionUtils {
 	        signature.update(hash);
 
 	        return signature.sign();
-		} catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
 
@@ -131,7 +131,7 @@ public class EncryptionUtils {
 	        verifier.update(hash);
 
 	        return verifier.verify(signature);
-		} catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
 
@@ -183,15 +183,15 @@ public class EncryptionUtils {
     }
 
 	public static byte[] encryptAndHmac(byte[] plaintextWSequenceNumber, SecretKey secretKey) {
-		
 		// Encrypt the plaintext with the secret key
 		byte[] cypherText = null;
+
 		try {
 			cypherText = encrypt(plaintextWSequenceNumber, secretKey);
 		} catch (Exception e) {
-			e.printStackTrace();
 			System.exit(255);
 		}
+
 		// Create the HMAC of the cypherText
 		byte[] hmac = createHmac(secretKey, cypherText);
 
@@ -224,7 +224,6 @@ public class EncryptionUtils {
 		try {
 			plaintext = decrypt(cypherText, secretKey);
 		} catch (Exception e) {
-			e.printStackTrace();
 			System.exit(255);
 		}		
 
@@ -263,7 +262,7 @@ public class EncryptionUtils {
 			byte[] hmacBytes = hmacSha256.doFinal(message);
 
 			return hmacBytes;
-		} catch (NoSuchAlgorithmException | InvalidKeyException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
 
@@ -275,7 +274,7 @@ public class EncryptionUtils {
 			MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
 			return digest.digest(message);
-		} catch (NoSuchAlgorithmException e) {
+		} catch (Exception e) {
 			System.exit(255);
 		}
 

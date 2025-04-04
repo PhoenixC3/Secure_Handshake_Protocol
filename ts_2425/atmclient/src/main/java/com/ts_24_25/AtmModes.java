@@ -16,8 +16,10 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.ArrayList;
-import java.util.Arrays;
+
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 public class AtmModes {
 	private int sequenceNumber;
@@ -63,10 +65,21 @@ public class AtmModes {
         //-------------------Autenticacao mutua e DH
 
 		try {
-			byte[] rsaEncyptedPubKey = EncryptionUtils.rsaEncrypt(publicKey.getEncoded(), authBank);
+			KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+			keyGen.init(256);
+			SecretKey aesKey = keyGen.generateKey();
+
+			byte[] pubKeyAesEncrypted = EncryptionUtils.encryptAndHmac(publicKey.getEncoded(), aesKey);
+			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), authBank);
+
+			//Enviar chave aes para o banco
+			MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+
+			out.writeObject(aesKeyMsg);
+			sequenceNumber++;
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(CommUtils.serializeBytes(rsaEncyptedPubKey), sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(pubKeyAesEncrypted, sequenceNumber);
 
 			out.writeObject(pubKeyMsg);
 			sequenceNumber++;
@@ -87,6 +100,8 @@ public class AtmModes {
 		}
 
         //-------------------Fim de autenticacao mutua
+
+		System.out.println("client_authenticated");
 
 		try {
 			//Enviar o request para o banco
@@ -119,7 +134,7 @@ public class AtmModes {
 			try {
 				responseMsg = (MsgSequence) CommUtils.deserializeBytes(plaintext);
 			} catch (Exception e) {
-				e.printStackTrace();
+				System.exit(255);
 			}
 
 			if (responseMsg != null) {
@@ -187,7 +202,7 @@ public class AtmModes {
 			byte[] rsaEncyptedPubKey = EncryptionUtils.rsaEncrypt(publicKey.getEncoded(), authBank);
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(CommUtils.serializeBytes(rsaEncyptedPubKey), sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(rsaEncyptedPubKey, sequenceNumber);
 
 			out.writeObject(pubKeyMsg);
 			sequenceNumber++;
@@ -240,7 +255,7 @@ public class AtmModes {
 			try {
 				responseMsg = (MsgSequence) CommUtils.deserializeBytes(plaintext);
 			} catch (Exception e) {
-				e.printStackTrace();
+				System.exit(255);
 			}
 
 			if (responseMsg != null) {
@@ -284,7 +299,7 @@ public class AtmModes {
 			byte[] rsaEncyptedPubKey = EncryptionUtils.rsaEncrypt(publicKey.getEncoded(), authBank);
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(CommUtils.serializeBytes(rsaEncyptedPubKey), sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(rsaEncyptedPubKey, sequenceNumber);
 
 			out.writeObject(pubKeyMsg);
 			sequenceNumber++;
@@ -337,7 +352,7 @@ public class AtmModes {
 			try {
 				responseMsg = (MsgSequence) CommUtils.deserializeBytes(plaintext);
 			} catch (Exception e) {
-				e.printStackTrace();
+				System.exit(255);
 			}
 
 			if (responseMsg != null) {
@@ -376,7 +391,7 @@ public class AtmModes {
 			byte[] rsaEncyptedPubKey = EncryptionUtils.rsaEncrypt(publicKey.getEncoded(), authBank);
 
 			//Enviar chave publica para o banco
-			MsgSequence pubKeyMsg = new MsgSequence(CommUtils.serializeBytes(rsaEncyptedPubKey), sequenceNumber);
+			MsgSequence pubKeyMsg = new MsgSequence(rsaEncyptedPubKey, sequenceNumber);
 
 			out.writeObject(pubKeyMsg);
 			sequenceNumber++;
@@ -429,7 +444,7 @@ public class AtmModes {
 			try {
 				responseMsg = (MsgSequence) CommUtils.deserializeBytes(plaintext);
 			} catch (Exception e) {
-				e.printStackTrace();
+				System.exit(255);
 			}
 
 			if (responseMsg != null) {
@@ -455,16 +470,31 @@ public class AtmModes {
 		SecretKey secretKey = null;
 
 		try {
-			// Criar chaves DH
+			// -------------Criar chaves DH
 			KeyPairGenerator clientKP = KeyPairGenerator.getInstance("DH");
 	        clientKP.initialize(2048);
 
 	        KeyPair clientDHKeyPair = clientKP.generateKeyPair();
 	        byte[] clientDHPubKey = clientDHKeyPair.getPublic().getEncoded();
 	        
-	        // Receber chave publica DH do bank
-			MsgSequence bankDHPubKeyMsg = (MsgSequence) in.readObject();
+	        // -----------Receber chave publica DH do bank
 
+			//Receber AES key do bank
+			MsgSequence aesDHPubKeyMsg = (MsgSequence) in.readObject();
+
+			if (aesDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
+				return null;
+			}
+
+			sequenceNumber++;
+
+			byte[] bankAesDHPubKey = aesDHPubKeyMsg.getMsg();
+			byte[] bankAesDHPubKeyDecoded = EncryptionUtils.rsaDecrypt(bankAesDHPubKey, privateKey);
+			SecretKey aesKeyBank = new SecretKeySpec(bankAesDHPubKeyDecoded, "AES");
+
+			// Receber DH
+			MsgSequence bankDHPubKeyMsg = (MsgSequence) in.readObject();
+			
 			if (bankDHPubKeyMsg.getSeqNumber() != sequenceNumber) {
 				return null;
 			}
@@ -472,12 +502,12 @@ public class AtmModes {
 			sequenceNumber++;
 
 			byte[] bankDHPubKey = bankDHPubKeyMsg.getMsg();
-			byte[] bankDHPubKeyDecoded = EncryptionUtils.rsaDecrypt(bankDHPubKey, privateKey);
+			byte[] bankDHPubKeyDecoded = EncryptionUtils.decryptAndVerifyHmac(bankDHPubKey, aesKeyBank);
 
-			// Fazer hash da chave DH publica do bank
+			// ------------Fazer hash da chave DH publica do bank
 			byte[] bankDHPubKeyHash = EncryptionUtils.hash(bankDHPubKeyDecoded);
 			
-			// Receber signed hash da chave DH publica do bank
+			// ------------Receber signed hash da chave DH publica do bank
 			MsgSequence bankDHPubKeyHashSignedMsg = (MsgSequence) in.readObject();
 
 			if (bankDHPubKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
@@ -488,19 +518,33 @@ public class AtmModes {
 
 			byte[] bankDHPubKeyHashSigned = bankDHPubKeyHashSignedMsg.getMsg();
 			
-			// Verificar a signature do bank na chave
+			// --------------Verificar a signature do bank na chave
 			if (!EncryptionUtils.verifySignature(bankDHPubKeyHash, bankDHPubKeyHashSigned, authBank)) {
 				return null;
 			}
 			
-			// Enviar chave publica DH ao bank
-			byte[] clientDHPubKeyEncrypted = EncryptionUtils.rsaEncrypt(clientDHPubKey, authBank);
-			MsgSequence messageDhPublicKey = new MsgSequence(clientDHPubKeyEncrypted, sequenceNumber);
+			//-------------- ATM envia chave publica DH ao Bank
 
-	        out.writeObject(messageDhPublicKey);
-	        sequenceNumber++;
+			//Criar chave AES para enviar DH Key
+			KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+			keyGen.init(256);
+			SecretKey aesKey = keyGen.generateKey();
+
+			// Envia chave AES para o ATM
+			byte[] rsaEncyptedAesKey = EncryptionUtils.rsaEncrypt(aesKey.getEncoded(), authBank);
+			MsgSequence aesKeyMsg = new MsgSequence(rsaEncyptedAesKey, sequenceNumber);
+
+			out.writeObject(aesKeyMsg);
+			sequenceNumber++;
+
+			//Envia DH pub key para o ATM
+			byte[] dhKeyAesEncrypted = EncryptionUtils.encryptAndHmac(clientDHPubKey, aesKey);
+			MsgSequence dhKeyAesEncryptedMsg = new MsgSequence(dhKeyAesEncrypted, sequenceNumber);
+
+			out.writeObject(dhKeyAesEncryptedMsg);
+			sequenceNumber++;
 	        
-	        // Enviar signed hash da chave DH publica ao bank
+	        // -------------Enviar signed hash da chave DH publica ao bank
 	        byte[] clientDHPubKeyHash = EncryptionUtils.hash(clientDHPubKey);
 	        byte[] clientDHPubKeyHashSigned = EncryptionUtils.sign(clientDHPubKeyHash, privateKey);
 	        MsgSequence clientDHPubKeyHashSignedMsg = new MsgSequence(clientDHPubKeyHashSigned, sequenceNumber);
@@ -508,9 +552,9 @@ public class AtmModes {
 	        out.writeObject(clientDHPubKeyHashSignedMsg);
 	        sequenceNumber++;
 	        
-	        secretKey = EncryptionUtils.createSessionKey(clientDHKeyPair.getPrivate(), bankDHPubKey);
+	        secretKey = EncryptionUtils.createSessionKey(clientDHKeyPair.getPrivate(), bankDHPubKeyDecoded);
 
-			// Enviar signed hash da session key ao bank
+			// ----------------Enviar signed hash da session key ao bank
 			byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
 			byte[] sessionKeyHashSigned = EncryptionUtils.sign(sessionKeyHash, privateKey);
 			MsgSequence sessionKeyHashSignedMsg = new MsgSequence(sessionKeyHashSigned, sequenceNumber);
@@ -518,7 +562,7 @@ public class AtmModes {
 			out.writeObject(sessionKeyHashSignedMsg);
 			sequenceNumber++;
 
-			// Receber signed hash da session key do bank
+			// ---------------Receber signed hash da session key do bank
 			MsgSequence bankSessionKeyHashSignedMsg = (MsgSequence) in.readObject();
 
 			if (bankSessionKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
@@ -527,7 +571,7 @@ public class AtmModes {
 
 			sequenceNumber++;
 
-			// Verificar a signature do bank na chave
+			// -------------------Verificar a signature do bank na chave
 			if (!EncryptionUtils.verifySignature(sessionKeyHash, bankSessionKeyHashSignedMsg.getMsg(), authBank)) {
 				return null;
 			}
