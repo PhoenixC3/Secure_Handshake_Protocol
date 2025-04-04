@@ -130,7 +130,7 @@ public class BankServer {
 
     public void start() {
 		try (ServerSocket serverSocket = new ServerSocket(Integer.parseInt(port))) {
-			System.out.println("Bank server is running on port " + port);
+			System.out.println("Bank server is running on port " + port + "\n");
 	
 			Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 				System.out.println("Shutting down server...");
@@ -186,6 +186,10 @@ public class BankServer {
 
 				in = inputStream(socket);
 				out = outputStream(socket);
+
+				if (in == null || out == null) {
+					return;
+				}
 				
 				while (true) {
 					//--------------Authentication----------------
@@ -225,18 +229,8 @@ public class BankServer {
 
 					//--------------Authentication Finished----------------
 
-					System.out.println("bank_authenticated");
-
 					// Receives the request
-					ArrayList<Byte> byteList = new ArrayList<>();
-					do {
-						byteList.add((byte) in.read());
-					} while (in.available() != 0);
-
-					byte[] allMessage = new byte[byteList.size()];
-					for (int i = 0; i < byteList.size(); i++) {
-						allMessage[i] = byteList.get(i);
-					}
+					byte[] allMessage = (byte[]) in.readObject();
 
 					// Decrypts the request
 					byte[] decryptedMessage = EncryptionUtils.decryptAndVerifyHmac(allMessage, secretKey);
@@ -250,42 +244,42 @@ public class BankServer {
 					}
 
 					String response = null;
-					if (msg == null) {
-						System.exit(255);
-					} else {
+					if (msg != null) {
 						// Verifies the sequence number
 						if (msg.getSeqNumber() != sequenceNumber) {
-							System.exit(255);
+							return;
 						}
 
 						sequenceNumber++;
 						
-						String request = new String(msg.getMsg());
+						String request = (String) CommUtils.deserializeBytes(msg.getMsg());
 
 						// Handles the request
 						response = handleRequest(request);
+
+						// Encrypts and sends the response
+						MsgSequence responseMsg = new MsgSequence(response.getBytes(), sequenceNumber);
+
+						byte[] cypherTextAndHmac = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(responseMsg), secretKey);
+
+						out.write(cypherTextAndHmac);
+						out.flush();
+
+						return;
 					}
+					else {
+						System.out.println("protocol_error\n");
 
-					// Encrypts and sends the response
-					MsgSequence responseMsg = new MsgSequence(response.getBytes(), sequenceNumber);
-
-					byte[] cypherTextAndHmac = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(responseMsg), secretKey);
-
-					out.write(cypherTextAndHmac);
-					out.flush();
+						return;
+					}
 				}
 			} catch (SocketTimeoutException e) {
 				System.out.println("protocol_error");
 
-				try {
-					socket.close();
-				} catch (IOException ex) {
-					ex.printStackTrace();
-				}
-
 				return;
 			} catch (Exception e) {
-				System.exit(255);
+				e.printStackTrace();
+				return;
 			}
 		}
 
@@ -310,7 +304,9 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println(returningString + "\n");
+						System.out.println("--------------------------------------------------");
+						System.out.println(returningString);
+						System.out.println("--------------------------------------------------\n");
 					}
 
 					return returningString;
@@ -329,7 +325,9 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println(returningString + "\n");
+						System.out.println("--------------------------------------------------");
+						System.out.println(returningString);
+						System.out.println("--------------------------------------------------\n");
 					}
 
 					return returningString;
@@ -348,7 +346,9 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println(returningString + "\n");
+						System.out.println("--------------------------------------------------");
+						System.out.println(returningString);
+						System.out.println("--------------------------------------------------\n");
 					}
 
 					return returningString;
@@ -361,7 +361,9 @@ public class BankServer {
 					}
 
 					if (returningString != null) {
-						System.out.println(returningString + "\n");
+						System.out.println("--------------------------------------------------");
+						System.out.println(returningString);
+						System.out.println("--------------------------------------------------\n");
 					}
 
 					return returningString;
@@ -492,7 +494,7 @@ public class BankServer {
 			} catch (SocketTimeoutException e) {
 				System.out.println("protocol_error");
 			} catch (Exception e) {
-				System.exit(255);
+				return null;
 			}
 
 			return outStream;
@@ -506,7 +508,7 @@ public class BankServer {
 			} catch (SocketTimeoutException e) {
 				System.out.println("protocol_error\n");
 			} catch (Exception e) {
-				System.exit(255);
+				return null;
 			}
 			return inStream;
 		}

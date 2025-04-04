@@ -101,8 +101,6 @@ public class AtmModes {
 
         //-------------------Fim de autenticacao mutua
 
-		System.out.println("client_authenticated");
-
 		try {
 			//Enviar o request para o banco
 			String request = requestMessage.getCmdType() + " " + requestMessage.getAccount() + (requestMessage.getAmount() != null ? " " + requestMessage.getAmount() : "");
@@ -112,7 +110,7 @@ public class AtmModes {
 
 			byte[] cypherTextAndHmac = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(msg), secretKey);
 
-			out.write(cypherTextAndHmac);
+			out.writeObject(cypherTextAndHmac);
 			out.flush();
 
 			sequenceNumber++;
@@ -170,6 +168,8 @@ public class AtmModes {
 
 			System.exit(63);
 		} catch (IOException e) {
+			e.printStackTrace();
+
 			File cfile = new File(requestMessage.getCardFile());
 
 			if (cfile.exists()) { 
