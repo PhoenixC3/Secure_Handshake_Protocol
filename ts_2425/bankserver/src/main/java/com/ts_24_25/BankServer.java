@@ -5,7 +5,6 @@ import java.net.*;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
@@ -19,6 +18,7 @@ public class BankServer {
     private String port;
     private String authFile;
     private static HashMap<String, Double> accounts = new HashMap<>();
+	private static HashMap<String, byte[]> cardFileHashes = new HashMap<>();
     private static PrivateKey privateKey;
 
     public static void main(String[] args) {
@@ -194,6 +194,8 @@ public class BankServer {
 				while (true) {
 					//--------------Authentication----------------
 
+					// ----------Receber chave publica do cliente
+
 					//Receber chave aes do cliente
 					MsgSequence aesKeyMsg = (MsgSequence) in.readObject();
 
@@ -221,7 +223,7 @@ public class BankServer {
 					X509EncodedKeySpec keySpec = new X509EncodedKeySpec(clientPublicKeyBytesDescrypted);
 					PublicKey clientPublicKey = keyFactory.generatePublic(keySpec);
 
-					//DH
+					// ----------DH
 					SecretKey secretKey = bankDH(clientPublicKey);
 					if (secretKey == null) {
 						return;
@@ -251,11 +253,24 @@ public class BankServer {
 						}
 
 						sequenceNumber++;
+
+						//Receber hash do card file do cliente
+						byte[] cardFileHashMsgBytes = (byte[]) in.readObject();
+						byte[] cardFileHashMsgBytesDecrypted = EncryptionUtils.decryptAndVerifyHmac(cardFileHashMsgBytes, secretKey);
+
+						MsgSequence cardFileHashMsg = (MsgSequence) CommUtils.deserializeBytes(cardFileHashMsgBytesDecrypted);
+						if (cardFileHashMsg.getSeqNumber() != sequenceNumber) {
+							return;
+						}
+
+						sequenceNumber++;
+
+						byte[] cardFileHash = cardFileHashMsg.getMsg();
 						
 						String request = (String) CommUtils.deserializeBytes(msg.getMsg());
 
 						// Handles the request
-						response = handleRequest(request);
+						response = handleRequest(request, clientPublicKey, cardFileHash);
 
 						// Encrypts and sends the response
 						MsgSequence responseMsg = new MsgSequence(response.getBytes(), sequenceNumber);
@@ -283,8 +298,7 @@ public class BankServer {
 			}
 		}
 
-		private static synchronized String handleRequest(String request) {
-
+		private static synchronized String handleRequest(String request, PublicKey clientPublicKey, byte[] cardFileHash) {
 			String[] parts = request.split(" ");
 			if (parts.length < 2) return null;
 			
@@ -299,8 +313,8 @@ public class BankServer {
 					} else {
 						double initialBalance = Double.parseDouble(parts[2]);
 						accounts.put(account, initialBalance);
+						cardFileHashes.put(account, cardFileHash);
 						returningString = "{\"account\":\"" + account + "\", \"initial_balance\": " + initialBalance + "}";
-						
 					}
 
 					if (returningString != null) {
@@ -316,11 +330,14 @@ public class BankServer {
 						returningString = null;
 					} else {
 						double depositAmount = Double.parseDouble(parts[2]);
-						if (depositAmount <= 0) {
+
+						if (depositAmount <= 0.00) {
+							returningString = null;
+						} else if (cardFileHash != cardFileHashes.get(account)) {
 							returningString = null;
 						} else {
 							accounts.put(account, accounts.get(account) + depositAmount);
-						returningString = "{\"account\":\"" + account + "\", \"deposit\": " + depositAmount + "}";
+							returningString = "{\"account\":\"" + account + "\", \"deposit\": " + depositAmount + "}";
 						}
 					}
 
@@ -338,6 +355,8 @@ public class BankServer {
 					} else {
 						double withdrawAmount = Double.parseDouble(parts[2]);
 						if (withdrawAmount > accounts.get(account)) {
+							returningString = null;
+						} else if (cardFileHash != cardFileHashes.get(account)) {
 							returningString = null;
 						} else {
 							accounts.put(account, accounts.get(account) - withdrawAmount);
@@ -357,7 +376,11 @@ public class BankServer {
 					if (!accounts.containsKey(account)) {
 						returningString = null;
 					} else {
-						returningString = "{\"account\":\"" + account + "\", \"balance\": " + accounts.get(account) + "}";
+						if (cardFileHash != cardFileHashes.get(account)) {
+							returningString = null;
+						} else {
+							returningString = "{\"account\":\"" + account + "\", \"balance\": " + accounts.get(account) + "}";
+						}
 					}
 
 					if (returningString != null) {
@@ -370,6 +393,7 @@ public class BankServer {
 
 				default:
 					returningString = null;
+					
 					return returningString;
 			}
 		}
