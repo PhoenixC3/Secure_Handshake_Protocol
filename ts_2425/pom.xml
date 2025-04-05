@@ -12,6 +12,7 @@
         <module>bankserver</module>
         <module>atmclient</module>
         <module>utils</module>
+        <module>mitm</module>
     </modules>
 
     <properties>
