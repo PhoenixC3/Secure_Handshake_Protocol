@@ -30,6 +30,8 @@
                         <descriptorRef>jar-with-dependencies</descriptorRef>
                     </descriptorRefs>
                     <outputDirectory>${project.basedir}/..</outputDirectory>
+                    <finalName>ATM</finalName>
+                    <appendAssemblyId>false</appendAssemblyId>
                     <archive>
                         <manifest>
                             <mainClass>com.ts_24_25.ATMClient</mainClass>
