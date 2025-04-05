@@ -426,8 +426,9 @@ public class BankServer {
 				byte[] bankDHPubKeyHash = EncryptionUtils.hash(bankDHPubKey);
 				byte[] bankDHPubKeyHashSigned = EncryptionUtils.sign(bankDHPubKeyHash, privateKey);
 				MsgSequence bankDHPubKeyHashSignedMsg = new MsgSequence(bankDHPubKeyHashSigned, sequenceNumber);
+				byte[] bankDHPubKeyHashSignedMsgBytes = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(bankDHPubKeyHashSignedMsg), aesKey);
 
-				out.writeObject(bankDHPubKeyHashSignedMsg);
+				out.writeObject(bankDHPubKeyHashSignedMsgBytes);
 				out.flush();
 
 				sequenceNumber++;
@@ -462,7 +463,9 @@ public class BankServer {
 				byte[] atmDHPubKeyHash = EncryptionUtils.hash(AtmDHPubKeyMsg.getMsg());
 				
 				// ----------------------Recebe hash signed da DH pub key do atm
-				MsgSequence atmDHPubKeyHashSignedMsg = (MsgSequence) in.readObject();
+				byte[] atmDHPubKeyHashSignedMsgBytes = (byte[]) in.readObject();
+				byte[] atmDHPubKeyHashSignedMsgBytesDecrypted = EncryptionUtils.decryptAndVerifyHmac(atmDHPubKeyHashSignedMsgBytes, aesKeyAtm);
+				MsgSequence atmDHPubKeyHashSignedMsg = (MsgSequence) CommUtils.deserializeBytes(atmDHPubKeyHashSignedMsgBytesDecrypted);
 
 				if (atmDHPubKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
 					return null;
@@ -480,7 +483,9 @@ public class BankServer {
 				SecretKey secretKey = EncryptionUtils.createSessionKey(bankDHKeyPair.getPrivate(), AtmDHPubKeyMsg.getMsg());
 
 				// --------------------Receber signed hash da session key do atm
-				MsgSequence sessionKeyHashSignedMsg = (MsgSequence) in.readObject();
+				byte[] sessionKeyHashSignedMsgBytes = (byte[]) in.readObject();
+				byte[] sessionKeyHashSignedMsgBytesDecrypted = EncryptionUtils.decryptAndVerifyHmac(sessionKeyHashSignedMsgBytes, aesKeyAtm);
+				MsgSequence sessionKeyHashSignedMsg = (MsgSequence) CommUtils.deserializeBytes(sessionKeyHashSignedMsgBytesDecrypted);
 
 				if (sessionKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
 					return null;
@@ -492,8 +497,9 @@ public class BankServer {
 				byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
 				byte[] sessionKeyHashSigned = EncryptionUtils.sign(sessionKeyHash, privateKey);
 				MsgSequence sessionKeyHashSignedMsgSend = new MsgSequence(sessionKeyHashSigned, sequenceNumber);
+				byte[] sessionKeyHashSignedMsgSendBytes = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(sessionKeyHashSignedMsgSend), aesKey);
 
-				out.writeObject(sessionKeyHashSignedMsgSend);
+				out.writeObject(sessionKeyHashSignedMsgSendBytes);
 				out.flush();
 
 				sequenceNumber++;

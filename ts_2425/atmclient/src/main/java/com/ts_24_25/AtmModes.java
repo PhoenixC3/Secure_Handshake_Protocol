@@ -589,7 +589,9 @@ public class AtmModes {
 			byte[] bankDHPubKeyHash = EncryptionUtils.hash(bankDHPubKeyMsg.getMsg());
 			
 			// ------------Receber signed hash da chave DH publica do bank
-			MsgSequence bankDHPubKeyHashSignedMsg = (MsgSequence) in.readObject();
+			byte[] bankDHPubKeyHashSignedRec = (byte[]) in.readObject();
+			byte[] bankDHPubKeyHashSignedDecoded = EncryptionUtils.decryptAndVerifyHmac(bankDHPubKeyHashSignedRec, aesKeyBank);
+			MsgSequence bankDHPubKeyHashSignedMsg = (MsgSequence) CommUtils.deserializeBytes(bankDHPubKeyHashSignedDecoded);
 
 			if (bankDHPubKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
 				return null;
@@ -633,8 +635,9 @@ public class AtmModes {
 	        byte[] clientDHPubKeyHash = EncryptionUtils.hash(clientDHPubKey);
 	        byte[] clientDHPubKeyHashSigned = EncryptionUtils.sign(clientDHPubKeyHash, privateKey);
 	        MsgSequence clientDHPubKeyHashSignedMsg = new MsgSequence(clientDHPubKeyHashSigned, sequenceNumber);
+			byte[] clientDHPubKeyHashSignedMsgSend = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(clientDHPubKeyHashSignedMsg), aesKey);
 			
-	        out.writeObject(clientDHPubKeyHashSignedMsg);
+	        out.writeObject(clientDHPubKeyHashSignedMsgSend);
 			out.flush();
 
 	        sequenceNumber++;
@@ -645,14 +648,17 @@ public class AtmModes {
 			byte[] sessionKeyHash = EncryptionUtils.hash(secretKey.getEncoded());
 			byte[] sessionKeyHashSigned = EncryptionUtils.sign(sessionKeyHash, privateKey);
 			MsgSequence sessionKeyHashSignedMsg = new MsgSequence(sessionKeyHashSigned, sequenceNumber);
+			byte[] sessionKeyHashSignedMsgSend = EncryptionUtils.encryptAndHmac(CommUtils.serializeBytes(sessionKeyHashSignedMsg), aesKey);
 
-			out.writeObject(sessionKeyHashSignedMsg);
+			out.writeObject(sessionKeyHashSignedMsgSend);
 			out.flush();
 
 			sequenceNumber++;
 
 			// ---------------Receber signed hash da session key do bank
-			MsgSequence bankSessionKeyHashSignedMsg = (MsgSequence) in.readObject();
+			byte[] bankSessionKeyHashSigned = (byte[]) in.readObject();
+			byte[] bankSessionKeyHashSignedDecoded = EncryptionUtils.decryptAndVerifyHmac(bankSessionKeyHashSigned, aesKeyBank);
+			MsgSequence bankSessionKeyHashSignedMsg = (MsgSequence) CommUtils.deserializeBytes(bankSessionKeyHashSignedDecoded);
 
 			if (bankSessionKeyHashSignedMsg.getSeqNumber() != sequenceNumber) {
 				return null;
