@@ -140,8 +140,6 @@ public class BankServer {
 				} catch (IOException e) {
 					System.exit(255);
 				}
-
-				System.exit(0);
 			}));
 	
 			while (true) {
