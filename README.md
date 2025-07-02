@@ -1,5 +1,4 @@
 # TS_24_25
-Projeto de TS 24/25
 
 To test the program do the following:
 
