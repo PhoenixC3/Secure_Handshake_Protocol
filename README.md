@@ -1,4 +1,4 @@
-# TS_24_25
+# Secure Bank ATM Protocol
 
 To test the program do the following:
 
